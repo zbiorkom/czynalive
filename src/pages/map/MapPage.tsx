@@ -288,6 +288,8 @@ export default function MapPage() {
         [city, navigate, stopId, vehicleId, tripId],
     );
     const openEntityRef = useRef(openEntity);
+    const navigateRef = useRef(navigate);
+    navigateRef.current = navigate;
     openEntityRef.current = openEntity;
 
     const closeSheet = () => {
@@ -315,8 +317,13 @@ export default function MapPage() {
                 [event.point.x - radius, event.point.y - radius],
                 [event.point.x + radius, event.point.y + radius],
             ];
-            const layers = ["cnc-vehicles-shape", "cnc-vehicles-label", "cnc-vehicles-dots", "cnc-stops"].filter((id) => map.getLayer(id));
+            const layers = ["cnc-vehicles-shape", "cnc-vehicles-label", "cnc-vehicles-dots", "cnc-stops", "cnc-cities"].filter((id) => map.getLayer(id));
             const features = map.queryRenderedFeatures(box, { layers });
+            const pill = features.find((feature) => feature.layer.id === "cnc-cities");
+            if (pill) {
+                if (pill.properties.id === city) return map.flyTo({ center: (pill.geometry as GeoJsonPoint).coordinates as [number, number], zoom: 12 });
+                return navigateRef.current(`/${pill.properties.id}`);
+            }
             const vehicle = features.find((feature) => feature.layer.id.startsWith("cnc-vehicles") && feature.properties.tier === "small");
             if (vehicle) return openEntityRef.current("pojazd", vehicle.properties.id, vehicle.properties.city, false);
             const dot = features.find((feature) => feature.layer.id === "cnc-vehicles-dots");
@@ -459,6 +466,14 @@ export default function MapPage() {
     useEffect(() => {
         stopLayerRef.current?.setTrip(overlay);
     }, [map, overlay]);
+
+    const cityPills = useMemo(
+        () => Object.values(byId ?? {}).filter((entry) => !entry.virtual).map((entry) => ({ id: entry.id, name: entry.name, location: entry.location as Point })),
+        [byId],
+    );
+    useEffect(() => {
+        stopLayerRef.current?.setCities(cityPills, zoom <= 9 && !selectionActive && !filterActive && !favouritesMode);
+    }, [map, cityPills, zoom <= 9, selectionActive, filterActive, favouritesMode, dark]);
 
     useEffect(() => {
         stopLayerRef.current?.setHighlighted(stopId);

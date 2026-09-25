@@ -8,12 +8,13 @@ import { ALIGHT, EDeparture, ERouteTuple, EStopDepartureTuple, ETripTuple, EVehi
 import { parseVehicleId } from "@/lib/transit";
 import { useThemeMode } from "@/components/timetable/common";
 import { hhmm, isLiveStatus } from "./departureUtils";
+import type { DepartureVehicles } from "./useDepartureVehicles";
 import { MarqueeText, PopupInfo, TimeChips } from "./parts";
 import { RouteChip } from "./RouteChip";
 import { vehicleTypeName } from "./VehicleTypeIcon";
 
 // Per-vehicle [delay ms, current headsign, model] (cnc/map/vehicles); lets a row name the trip its vehicle is still on.
-export const VehicleExtrasContext = createContext<Record<string, [delay: number | null, headsign: string, model: string]> | null>(null);
+export const VehicleExtrasContext = createContext<DepartureVehicles | null>(null);
 
 export const departureLink = (city: string, departure: StopDepartureTuple) => {
     const vehicle = departure[EStopDepartureTuple.vehicle];
@@ -108,6 +109,14 @@ export const DepartureRow = ({ city, departure, now, compact = false, active, sh
         ) : (
             <>{t("stopDetails.inPreviousTripTo").replace(/ do$/, "")}</>
         );
+    } else if (status === StopDepartureStatus.OnTrip && live && vehicle) {
+        const state = extras[vehicle[EVehiclePosition.id]];
+        if (state?.[3])
+            caption = (
+                <>
+                    {t(state[4] ? "stopDetails.onStop" : "stopDetails.nextStop")}: <i>{state[3]}</i>
+                </>
+            );
     }
 
     const handleClick = () => {

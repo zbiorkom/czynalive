@@ -32,7 +32,7 @@ import { useApi } from "@/api/useApi";
 import { fetchCityAlerts } from "@/components/alerts/api";
 import { typeIcons, vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
 import { PageHeader, PageTemplate } from "@/components/PageHeader";
-import { ExpandableText, ShareUrl, stopLink, TypeCircles, typeReadableKey, useUrlTab } from "@/components/timetable/common";
+import { ExpandableText, ShareUrl, stopLink, TypeCircles, typeReadableKey, useUrlTab, agencyNameOf } from "@/components/timetable/common";
 import { RouteMinimap, type LineStop } from "@/components/timetable/RouteMinimap";
 import { RouteAlertBox, type StopTimetableResponse } from "@/components/timetable/StopTimetable";
 import { useRouteVehicles } from "@/components/timetable/useRouteVehicles";
@@ -340,7 +340,7 @@ export default function RouteTimetablePage() {
     const dataCity = params.get("miasto") || city;
     const cityInfo = useCity(city);
     const { t } = useTranslation();
-    const agencyName = cityInfo?.agencies?.default?.name ?? cityInfo?.name ?? "";
+    const agencyName = agencyNameOf(city, cityInfo);
     const timeZone = cityInfo?.timezone ?? "Europe/Warsaw";
 
     const details = useApi((signal) => cityGet<RouteDetails>(dataCity, `/routes/${encodeURIComponent(routeId)}`, undefined, signal), [dataCity, routeId]);

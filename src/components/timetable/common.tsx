@@ -26,8 +26,8 @@ export const sortRoutes = <T extends RouteTuple>(routes: T[]): T[] =>
     [...routes].sort(
         (a, b) =>
             typeRank(a[ERouteTuple.routeType]) - typeRank(b[ERouteTuple.routeType]) ||
-            Number(b[ERouteTuple.routeAgency] === "default") - Number(a[ERouteTuple.routeAgency] === "default") ||
-            compareRouteNames(a[ERouteTuple.routeName], b[ERouteTuple.routeName]),
+            compareRouteNames(a[ERouteTuple.routeName], b[ERouteTuple.routeName]) ||
+            Number(b[ERouteTuple.routeAgency] === "default") - Number(a[ERouteTuple.routeAgency] === "default"),
     );
 
 // One entry per (type, displayed name), as the original keys lines by name.
@@ -231,3 +231,13 @@ export const useUrlTab = <T extends string>(key: string, tabs: readonly T[], fal
     };
     return [value, update];
 };
+
+// Short agency names used in the original's headings where the city list carries a long form.
+const AGENCY_SHORT_NAMES: Record<string, string> = { warsaw: "WTP Warszawa" };
+
+export const agencyNameOf = (city: string, cityInfo?: { name?: string; agencies?: { default?: { name?: string } } }) =>
+    AGENCY_SHORT_NAMES[city] ?? cityInfo?.agencies?.default?.name ?? cityInfo?.name ?? "";
+
+// Lines grouped by numeric type id (the original iterates an object keyed by type), then by name.
+export const sortRoutesByTypeId = <T extends RouteTuple>(routes: T[]): T[] =>
+    [...routes].sort((a, b) => a[ERouteTuple.routeType] - b[ERouteTuple.routeType] || compareRouteNames(a[ERouteTuple.routeName], b[ERouteTuple.routeName]));

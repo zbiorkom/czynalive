@@ -1,12 +1,13 @@
 import { Box, Typography } from "@mui/material";
 import maplibregl from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useCity } from "@/api/cities";
 import { EVehiclePosition, type Point } from "@/api/types";
 import { useMapFeatures, useVehicleExtras, useViewport } from "@/components/map/hooks";
 import { lcdMarkerHtml } from "@/components/map/markers";
-import { mapStyleFor } from "@/components/map/mapStyle";
+import { attributionFor, mapStyleFor } from "@/components/map/mapStyle";
+import { BrandLogo } from "@/components/map/MapLogo";
 
 const LCD_ZOOM = 15;
 const RELOAD_MS = 600_000;
@@ -17,9 +18,15 @@ export default function LcdMapPage() {
     const { city = "" } = useParams();
     const cityInfo = useCity(city);
     const [params] = useSearchParams();
+    const navigate = useNavigate();
     const containerRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<maplibregl.Map | null>(null);
     const markers = useRef(new Map<string, { marker: maplibregl.Marker; html: string; from: Point; to: Point; start: number }>());
+
+    // The board map exists only for Słupsk in the original; other cities are sent there.
+    useEffect(() => {
+        if (city !== "slupsk") navigate("/slupsk");
+    }, [city]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -41,7 +48,7 @@ export default function LcdMapPage() {
         const hasView = params.get("z") && params.get("lat") && params.get("lng") && [z, lat, lng].every(Number.isFinite);
         const instance = new maplibregl.Map({
             container: containerRef.current,
-            style: mapStyleFor("streets", false),
+            style: mapStyleFor("osm", false),
             center: hasView ? [lng, lat] : cityInfo.location,
             zoom: hasView ? z : LCD_ZOOM,
             maxZoom: 20,
@@ -51,7 +58,7 @@ export default function LcdMapPage() {
             fadeDuration: 0,
         });
         instance.touchZoomRotate.disableRotation();
-        instance.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
+        instance.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: attributionFor("osm") }), "bottom-right");
         instance.on("moveend", () => {
             const center = instance.getCenter();
             const search = new URLSearchParams(window.location.search);
@@ -130,17 +137,18 @@ export default function LcdMapPage() {
     }, [map, features.positions, extras]);
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100dvh", bgcolor: "#f5f5f5" }}>
-            <Box sx={{ height: 60, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 3, px: "20px", lineHeight: 1 }} className="bg-default-bg">
-                <Typography variant="h4" component="div" className="text-primary" sx={{ fontWeight: 800, fontSize: "1.6rem !important" }}>
-                    Czynalive
-                </Typography>
-                <Typography variant="h4" component="div" className="text-default-text" sx={{ fontWeight: 700, fontSize: "1.5rem !important" }}>
-                    {cityInfo?.name ? `${cityInfo.name} — pojazdy na żywo` : "Pojazdy na żywo"}
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
+            <Box sx={{ height: 60, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 3, padding: "0 20px", lineHeight: 1 }} className="bg-default-bg">
+                <BrandLogo />
+                <Typography variant="h4" className="text-default-text" sx={{ fontWeight: "bold" }}>
+                    Napędzane przez Czynalive
                 </Typography>
             </Box>
             <Box sx={{ position: "relative", flex: 1, minHeight: 0 }}>
                 <div ref={containerRef} className="noselect mapgl-map" style={{ position: "absolute", inset: 0 }} />
+                <Box sx={{ position: "absolute", left: 0, bottom: "calc(1px + env(safe-area-inset-bottom, 0))" }}>
+                    <BrandLogo style={{ opacity: 0.7 }} />
+                </Box>
             </Box>
         </Box>
     );

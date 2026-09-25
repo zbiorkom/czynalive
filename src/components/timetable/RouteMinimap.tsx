@@ -111,7 +111,10 @@ export const RouteMinimap = ({ center, maxZoom = 18, line, stops, routeType, veh
 
     const fit = () => {
         if (!map || !boundsRef.current || boundsRef.current.isEmpty()) return;
-        map.fitBounds(boundsRef.current, { padding: 30, duration: 100 });
+        const container = map.getContainer();
+        const x = Math.min(70, Math.floor(container.clientWidth / 6));
+        const y = Math.min(70, Math.floor(container.clientHeight / 6));
+        map.fitBounds(boundsRef.current, { padding: { top: y, bottom: y, left: x, right: x }, duration: 100 });
     };
 
     useEffect(() => {

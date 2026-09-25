@@ -213,3 +213,51 @@ export const tripDashId = (map: MapLibreMap, typeName: string) => {
     } as never);
     return id;
 };
+
+// City name pill shown instead of vehicles when zoomed far out.
+const CITY_FONT = `700 20px "Helvetica Neue", Arial, Helvetica, sans-serif`;
+const CITY_PAD = 6;
+const CITY_BORDER = 2;
+const CITY_HEIGHT = 30;
+const CITY_MAX = 200;
+
+export const cityPillId = (map: MapLibreMap, city: string, name: string) => {
+    const id = `city|${city}|${themeKey()}`;
+    if (map.hasImage(id)) return id;
+    const context = measure();
+    if (!context) return id;
+    context.font = CITY_FONT;
+    const width = Math.min(Math.ceil(context.measureText(name).width), CITY_MAX) + CITY_PAD * 2 + CITY_BORDER * 2;
+    const height = CITY_HEIGHT + CITY_BORDER * 2;
+    drawImage(map, id, width, height, (ctx) => {
+        const dark = isDark();
+        const background = dark ? cssVar("--primary") : cssVar("--default-bg");
+        const foreground = dark ? cssVar("--default-text") : cssVar("--primary");
+        const x = CITY_BORDER / 2;
+        const w = width - CITY_BORDER;
+        const h = height - CITY_BORDER;
+        const r = 16;
+        ctx.beginPath();
+        ctx.moveTo(x + r, x);
+        ctx.lineTo(x + w - r, x);
+        ctx.arcTo(x + w, x, x + w, x + r, r);
+        ctx.lineTo(x + w, x + h - r);
+        ctx.arcTo(x + w, x + h, x + w - r, x + h, r);
+        ctx.lineTo(x + r, x + h);
+        ctx.arcTo(x, x + h, x, x + h - r, r);
+        ctx.lineTo(x, x + r);
+        ctx.arcTo(x, x, x + r, x, r);
+        ctx.closePath();
+        ctx.fillStyle = background;
+        ctx.fill();
+        ctx.lineWidth = CITY_BORDER;
+        ctx.strokeStyle = foreground;
+        ctx.stroke();
+        ctx.font = CITY_FONT;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = foreground;
+        ctx.fillText(name, width / 2, height / 2 + 1, CITY_MAX);
+    });
+    return id;
+};

@@ -279,6 +279,8 @@ export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, 
                             routeId={routeId}
                             brigade={brigade}
                             currentTripId={live.trip?.[ETripTuple.tripId]}
+                            vehicleId={vehicleId}
+                            delay={hasDelay ? currentPoint![1] : null}
                             onTripClick={(tripRef) => onTripClick(tripRef, live.city)}
                         />
                     )}

@@ -12,7 +12,7 @@ import { useApi } from "@/api/useApi";
 import { fetchCityAlerts } from "@/components/alerts/api";
 import { typeIcons, vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
 import { PageHeader, PageTemplate } from "@/components/PageHeader";
-import { ExpandableText, routeLink, ShareLine, SmallAction, sortRoutes, sortTypes, stopLink, TypeCircles, typeReadableKey, uniqueRoutes, useThemeMode } from "@/components/timetable/common";
+import { ExpandableText, routeLink, ShareLine, SmallAction, sortRoutesByTypeId, sortTypes, stopLink, TypeCircles, typeReadableKey, uniqueRoutes, useThemeMode, agencyNameOf } from "@/components/timetable/common";
 import { RouteAlertBox, StopTimetable, SubwayTimetable, type StopTimetableResponse } from "@/components/timetable/StopTimetable";
 import { useRecentStops } from "@/components/timetable/recentStops";
 
@@ -79,7 +79,7 @@ export default function StopTimetablePage() {
     const cityInfo = useCity(city);
     const { t } = useTranslation();
     const { add: addRecent } = useRecentStops(city);
-    const agencyName = cityInfo?.agencies?.default?.name ?? cityInfo?.name ?? "";
+    const agencyName = agencyNameOf(city, cityInfo);
     const cityName = cityInfo?.name ?? city;
     const timeZone = cityInfo?.timezone;
 
@@ -102,13 +102,13 @@ export default function StopTimetablePage() {
     const alerts = useApi(routeId ? (signal) => fetchCityAlerts(dataCity, signal) : null, [dataCity, routeId]);
 
     const stop = meta.data?.stop;
-    const routes = useMemo(() => uniqueRoutes(sortRoutes((stop?.[EStopTuple.routes] as RouteTuple[] | undefined) ?? [])), [stop]);
+    const routes = useMemo(() => uniqueRoutes(sortRoutesByTypeId((stop?.[EStopTuple.routes] as RouteTuple[] | undefined) ?? [])), [stop]);
     const route = routeId ? ((stop?.[EStopTuple.routes] as RouteTuple[] | undefined) ?? []).find((entry) => entry[ERouteTuple.routeId] === routeId) : undefined;
     const stopName = stop?.[EStopTuple.stopName] ?? "";
     const routeName = route?.[ERouteTuple.routeName] ?? routeId ?? "";
     const headsign = meta.data?.directions.find((entry) => entry[0][ERouteTuple.routeId] === routeId)?.[2] ?? route?.[ERouteTuple.routeLongName] ?? "";
 
-    const headerText = (stop ? (routeId ? `${stopName}, ${t("global.route_id")} ${routeName}` : stopName) : null);
+    const headerText = !stop ? null : !routeId ? stopName : route?.[ERouteTuple.routeType] === 1 ? null : `${stopName}, ${t("global.route_id")} ${routeName}`;
 
     useEffect(() => {
         if (stop) addRecent(stop as unknown as Parameters<typeof addRecent>[0]);

@@ -1,5 +1,5 @@
 import { Alert, Box, CircularProgress, Typography, useTheme } from "@mui/material";
-import { useEffect, useState, type ReactNode } from "react";
+import { forwardRef, useEffect, useState, type ReactNode } from "react";
 
 export const DISPLAY_FONT = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
 
@@ -19,14 +19,15 @@ export const useDisplayScheme = (city: string): DisplayScheme => {
     return theme.palette.mode === "dark" ? { ...scheme, text: theme.palette.text.primary } : scheme;
 };
 
-// Large board sizes scale with the viewport so a phone and a TV both work.
+// Board font sizes of the original (fixed, sized for a TV screen).
 export const SIZE = {
-    displayLg: "clamp(1.6rem, 7vw, 6rem)",
-    displayMd: "clamp(1.4rem, 5.2vw, 4rem)",
-    displaySm: "clamp(1.5rem, 4.5vw, 3.5rem)",
-    h1: "clamp(1.4rem, 3.6vw, 3rem)",
-    h2: "clamp(1.3rem, 3vw, 2.5rem)",
-    h3: "clamp(1.1rem, 2.6vw, 2rem)",
+    displayLg: "6rem",
+    displayMd: "4rem",
+    displaySm: "3.5rem",
+    h1: "3rem",
+    h2: "2.5rem",
+    h3: "2rem",
+    lead: "1.25rem",
 };
 
 export const useClock = (intervalMs = 1000) => {
@@ -38,16 +39,21 @@ export const useClock = (intervalMs = 1000) => {
     return now;
 };
 
-export const DisplayFooter = ({ fixed = false }: { fixed?: boolean }) => (
+export const formatBoardDate = (now: Date, timeZone = "Europe/Warsaw") => {
+    const parts = new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone }).format(now);
+    const time = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(now);
+    return `${parts.replace(" r.", "")} ${time}`;
+};
+
+export const DisplayFooter = () => (
     <Box
         sx={{
-            position: fixed ? "fixed" : "relative",
-            flexShrink: 0,
+            position: "fixed",
             bottom: 0,
             left: 0,
             right: 0,
             textAlign: "center",
-            p: { xs: 1.5, md: 3 },
+            padding: 3,
             borderTop: "2px solid",
             borderColor: "divider",
             display: "flex",
@@ -59,73 +65,99 @@ export const DisplayFooter = ({ fixed = false }: { fixed?: boolean }) => (
             lineHeight: 1,
         }}
     >
-        <Typography sx={{ fontWeight: 900, fontFamily: DISPLAY_FONT, fontSize: "clamp(1rem, 2.4vw, 1.8rem) !important" }}>Napędzane przez Czynalive</Typography>
+        <picture style={{ display: "flex", alignItems: "center" }}>
+            <img height="30" width="30" src="/favicon.svg" alt="Czynalive Logo" loading="lazy" />
+        </picture>
+        <Typography variant="h4" sx={{ fontWeight: "900", fontFamily: DISPLAY_FONT, fontSize: "1.8rem" }}>
+            Napędzane przez Czynalive
+        </Typography>
     </Box>
 );
 
-export const DisplayHeader = ({ scheme, withTime = true, now, timeZone = "Europe/Warsaw", children }: { scheme: DisplayScheme; withTime?: boolean; now: Date; timeZone?: string; children: ReactNode }) => {
+type HeaderProps = { scheme: DisplayScheme; withTime?: boolean; now: Date; timeZone?: string; children: ReactNode };
+
+export const DisplayHeader = forwardRef<HTMLDivElement, HeaderProps>(({ scheme, withTime = true, now, timeZone = "Europe/Warsaw", children }, ref) => {
     const theme = useTheme();
     return (
         <Box
+            ref={ref}
             sx={{
-                position: "relative",
-                flexShrink: 0,
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
                 zIndex: 1100,
                 textAlign: "center",
-                p: { xs: 1.5, md: 3 },
-                pb: withTime ? 1 : { xs: 1.5, md: 3 },
+                padding: 3,
+                paddingBottom: withTime ? 1 : 3,
                 backgroundColor: scheme.headerBackground,
-                color: scheme.headerText,
+                color: "primary.contrastText",
                 boxShadow: withTime ? 0 : 4,
             }}
         >
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: { xs: 1.5, md: 3 }, flexWrap: "nowrap" }}>{children}</Box>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, flexWrap: "wrap" }}>{children}</Box>
             {withTime && (
                 <Box
                     sx={{
                         mt: 2,
                         textAlign: "center",
                         backgroundColor: theme.palette.mode === "dark" ? "rgba(39, 39, 39, 0.95)" : "rgba(255, 255, 255, 0.95)",
-                        p: "8px 16px",
+                        padding: "8px 16px",
                         borderBottom: "2px solid",
                         borderColor: "divider",
-                        mx: { xs: -1.5, md: -3 },
-                        mb: -1,
+                        marginLeft: -3,
+                        marginRight: -3,
+                        marginBottom: -1,
                     }}
                 >
-                    <Typography sx={{ fontWeight: 900, fontSize: `${SIZE.h3} !important`, fontFamily: DISPLAY_FONT, color: theme.palette.mode === "dark" ? "#fff" : "#000" }}>
-                        {new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone }).format(now)}
+                    <Typography variant="h4" sx={{ fontWeight: "900", fontSize: SIZE.h3, fontFamily: DISPLAY_FONT, color: "var(--black)" }}>
+                        {formatBoardDate(now, timeZone)}
                     </Typography>
                 </Box>
             )}
         </Box>
     );
-};
+});
+DisplayHeader.displayName = "DisplayHeader";
 
-export const DisplayMessage = ({ severity, lines, loading }: { severity?: "error" | "info" | "warning"; lines: string[]; loading?: boolean }) => (
-    <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", p: 3, backgroundColor: "background.default", textAlign: "center" }}>
+const FULL = { height: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: 3, backgroundColor: "background.default" } as const;
+
+export const DisplayMessage = ({ severity, lines, loading, extra }: { severity?: "error" | "info" | "warning"; lines: string[]; loading?: boolean; extra?: ReactNode }) => (
+    <Box sx={FULL}>
         {loading ? (
             <>
                 <CircularProgress size={60} />
-                {lines.map((line, index) => (
-                    <Typography
-                        key={line}
-                        color={index ? "textSecondary" : undefined}
-                        sx={{ mt: index ? 1 : 3, fontFamily: DISPLAY_FONT, fontWeight: index ? 700 : 800, fontSize: `${SIZE.h1} !important` }}
-                    >
-                        {line}
-                    </Typography>
-                ))}
+                <Typography variant="h5" sx={{ mt: 3, fontFamily: DISPLAY_FONT, fontWeight: "800", fontSize: SIZE.h1 }}>
+                    {lines[0]}
+                </Typography>
+                <Typography variant="body1" color="textSecondary" sx={{ mt: 1, fontFamily: DISPLAY_FONT, fontWeight: "700", fontSize: SIZE.h1 }}>
+                    {lines[1]}
+                </Typography>
             </>
         ) : (
-            <Alert severity={severity ?? "error"} icon={false}>
-                {lines.map((line, index) => (
-                    <Typography key={line} sx={{ fontFamily: DISPLAY_FONT, fontWeight: index ? 700 : 800, fontSize: `${SIZE.h1} !important` }}>
-                        {line}
-                    </Typography>
-                ))}
+            <Alert severity={severity ?? "error"} sx={{ fontSize: SIZE.lead }} icon={false}>
+                <Typography variant="h6" sx={{ fontSize: SIZE.h1, fontFamily: DISPLAY_FONT, fontWeight: "800" }}>
+                    {lines[0]}
+                </Typography>
+                <Typography sx={{ fontSize: SIZE.h1, fontFamily: DISPLAY_FONT, fontWeight: "700" }}>{lines[1]}</Typography>
             </Alert>
         )}
-        <DisplayFooter fixed />
+        <DisplayFooter />
+        {extra}
+    </Box>
+);
+
+// Header-only board with a warning in the middle (data could not be loaded).
+export const DisplayWarning = ({ header, text }: { header: ReactNode; text: string }) => (
+    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column", padding: 3, backgroundColor: "background.default", overflow: "hidden" }}>
+        {header}
+        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flex: 1, paddingTop: "200px" }}>
+            <Alert severity="warning" sx={{ fontSize: SIZE.lead }} icon={false}>
+                <Typography variant="h6" sx={{ fontFamily: DISPLAY_FONT, fontWeight: "800", fontSize: SIZE.h1 }}>
+                    {text}
+                </Typography>
+            </Alert>
+        </Box>
+        <DisplayFooter />
     </Box>
 );

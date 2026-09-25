@@ -1,80 +1,77 @@
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import { Box, Button, Skeleton, Table, TableBody, TableCell, TableRow, Typography } from "@mui/material";
+import BusinessIcon from "@mui/icons-material/Business";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import CommuteIcon from "@mui/icons-material/Commute";
+import { Alert, Box, List, ListItem, ListItemIcon, ListItemText, Skeleton, Typography, type SvgIconProps } from "@mui/material";
+import { Fragment, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { cityGet } from "@/api/client";
 import { EVehicle, type VehicleTuple } from "@/api/types";
 import { useApi } from "@/api/useApi";
-import { fleetUrl, parseVehicleId, vehicleType } from "@/lib/transit";
-import { useSettings } from "@/store/settings";
+import { parseVehicleId } from "@/lib/transit";
 
 type Props = { city: string; vehicleId: string; brigade: string };
 
-// "Pojazd" tab: fleet data from phototrans / ilostan.
-export const VehicleInfoTab = ({ city, vehicleId, brigade }: Props) => {
+type Row = [field: string, value: string, Icon: ComponentType<SvgIconProps>];
+
+// "Pojazd" tab: fleet data (phototrans / ilostan) laid out as the original's technical data list.
+export const VehicleInfoTab = ({ city, vehicleId }: Props) => {
     const { t } = useTranslation();
-    const [settings] = useSettings();
-    const { number, type, agency } = parseVehicleId(vehicleId);
+    const { number } = parseVehicleId(vehicleId);
     const { data, error, loading } = useApi((signal) => cityGet<VehicleTuple>(city, `/vehicles/vehicle/${encodeURIComponent(vehicleId)}`, undefined, signal), [city, vehicleId]);
 
     if (loading && !data) {
         return (
-            <Box sx={{ mx: 1 }}>
+            <div>
                 {["a", "b", "c"].map((key) => (
-                    <Skeleton key={key} variant="text" height={40} />
+                    <Skeleton key={key} animation="wave" variant="text" height={50} width="100%" style={{ marginBottom: 5 }} />
                 ))}
+            </div>
+        );
+    }
+    if (error || !data) {
+        return (
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <h4>{t("vehicleDetails.noVehicleData")}</h4>
             </Box>
         );
     }
 
-    const rows: [string, string][] = [
-        [t("vehicleInformation.vehicleType"), vehicleType(type).name],
-        [t("vehicleInformation.fleetNumber"), number || "-"],
+    const [brand, ...model] = (data[EVehicle.model] ?? "").split(" ");
+    const rows: Row[] = [
+        ["brand", brand, CommuteIcon],
+        ["brandModel", model.join(" "), CommuteIcon],
+        ["productionYear", data[EVehicle.year] ? String(data[EVehicle.year]) : "", CalendarMonthIcon],
+        ["operator", data[EVehicle.agency] ?? "", BusinessIcon],
     ];
-    if (brigade) rows.push([t("vehicleInformation.brigade"), brigade]);
-    if (data) {
-        if (data[EVehicle.model]) rows.push([t("vehicleInformation.brandModel"), data[EVehicle.model]]);
-        if (data[EVehicle.year]) rows.push([t("vehicleInformation.productionYear"), String(data[EVehicle.year])]);
-        if (data[EVehicle.agency]) rows.push([t("vehicleInformation.operator"), data[EVehicle.agency]]);
-    } else if (agency !== "default") rows.push([t("vehicleInformation.operatorId"), agency]);
-
-    const url = data ? fleetUrl(data[EVehicle.url]) : "";
+    const technical = rows.filter(([, value]) => value !== "");
 
     return (
-        <Box sx={{ mx: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                {t("vehicleInformation.technicalData")}
-            </Typography>
-            <Table size="small">
-                <TableBody>
-                    {rows.map(([label, value]) => (
-                        <TableRow key={label}>
-                            <TableCell sx={{ pl: 0, opacity: 0.8 }}>{label}</TableCell>
-                            <TableCell sx={{ pr: 0, fontWeight: 600 }} align="right">
-                                {value}
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-            {error && !data && (
-                <Typography variant="body2" sx={{ mt: 2, opacity: 0.8 }}>
-                    {t("vehicleDetails.noVehicleData")}
+        <Box>
+            <Fragment>
+                <Typography variant="subtitle1" gutterBottom>
+                    {t("global.vehicleNoShort")} #{number}
                 </Typography>
-            )}
-            {url && settings.showVehiclePhotos && (
-                <Button
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    variant="outlined"
-                    fullWidth
-                    endIcon={<OpenInNewIcon />}
-                    sx={{ mt: 2 }}
-                    className="text-default-text"
-                >
-                    {t("vehicleInformation.photoSrc")} ({new URL(url).hostname.replace("www.", "")})
-                </Button>
-            )}
+                {technical.length > 0 && (
+                    <>
+                        <Typography variant="subtitle1" gutterBottom>
+                            {t("vehicleInformation.technicalData")}
+                        </Typography>
+                        <List sx={{ mb: 2 }}>
+                            {technical.map(([field, value, Icon]) => (
+                                <ListItem key={field} dense>
+                                    <ListItemIcon>
+                                        <Icon />
+                                    </ListItemIcon>
+                                    <ListItemText primary={t(`vehicleInformation.${field}`)} secondary={value} />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </>
+                )}
+            </Fragment>
+            <Alert severity="info" sx={{ mt: 2 }}>
+                {t("vehicleInformation.equipmentDisclaimer")}
+            </Alert>
         </Box>
     );
 };

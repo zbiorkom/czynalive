@@ -1,12 +1,13 @@
 import type { Feature, FeatureCollection } from "geojson";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
 import { EStopTuple, type Point, type StopTuple } from "@/api/types";
-import { stopArrowId, stopIconId, tripDashId } from "./canvasImages";
+import { cityPillId, stopArrowId, stopIconId, tripDashId } from "./canvasImages";
 import { typeClass } from "./icons";
 
 const STOPS = "cnc-stops";
 const ARROWS = "cnc-stop-arrows";
 const TRIP_LINE = "cnc-trip-line";
+const CITIES = "cnc-cities";
 
 export const STOPS_ZOOM = 14;
 
@@ -94,6 +95,7 @@ export class StopLayer {
         map.addSource(TRIP_LINE, { type: "geojson", data: collection() });
         map.addSource(STOPS, { type: "geojson", data: collection() });
         map.addSource(ARROWS, { type: "geojson", data: collection() });
+        map.addSource(CITIES, { type: "geojson", data: collection() });
         map.addLayer({
             id: "cnc-trip-line",
             type: "line",
@@ -124,8 +126,24 @@ export class StopLayer {
                 "icon-ignore-placement": true,
             },
         });
+        map.addLayer({
+            id: CITIES,
+            type: "symbol",
+            source: CITIES,
+            layout: { "icon-image": ["get", "icon"], "icon-allow-overlap": true, "icon-ignore-placement": true },
+        });
         this.render();
     };
+
+    private cities: { id: string; name: string; location: Point }[] = [];
+    private citiesVisible = false;
+
+    // Pills of every city, shown instead of vehicles when zoomed far out.
+    setCities(cities: { id: string; name: string; location: Point }[], visible: boolean) {
+        this.cities = cities;
+        this.citiesVisible = visible;
+        this.render();
+    }
 
     setStops(stops: StopTuple[], visible: boolean) {
         this.stops = stops;
@@ -184,6 +202,10 @@ export class StopLayer {
             });
         }
         (map.getSource(TRIP_LINE) as GeoJSONSource | undefined)?.setData(collection(lineFeatures));
+        const cityFeatures: Feature[] = this.citiesVisible
+            ? this.cities.map((city) => ({ type: "Feature", geometry: { type: "Point", coordinates: city.location }, properties: { id: city.id, icon: cityPillId(map, city.id, city.name) } }))
+            : [];
+        (map.getSource(CITIES) as GeoJSONSource | undefined)?.setData(collection(cityFeatures));
         this.renderTripStops();
     };
 }

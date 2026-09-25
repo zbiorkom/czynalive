@@ -7,7 +7,7 @@ import { cityGet } from "@/api/client";
 import { ERouteTuple, EStopTuple, type RouteTuple, type StopTuple, type StopTupleDetailed } from "@/api/types";
 import { RouteChip } from "@/components/departures/RouteChip";
 import { Highlight, ListRow, ShowMoreButton, StopNameBadge } from "@/components/departures/parts";
-import { sortRoutes, sortTypes, uniqueRoutes } from "./common";
+import { sortRoutesByTypeId, sortTypes, uniqueRoutes } from "./common";
 
 export type SearchStopResult = [firstStopId: string, city: string, groupName: string, stops: StopTupleDetailed[]];
 type RawSearch = { stops: SearchStopResult[]; stations: [stopId: string, city: string, name: string][] };
@@ -56,7 +56,7 @@ const MAX_CHIPS = 5;
 export const StopItemContent = ({ stop, query }: { stop: StopTuple | StopTupleDetailed; query?: string }) => {
     const [expanded, setExpanded] = useState(false);
     const direction = ((stop as StopTupleDetailed)[EStopTuple.direction] as string | undefined) ?? "";
-    const routes = uniqueRoutes(sortRoutes(((stop as StopTupleDetailed)[EStopTuple.routes] as RouteTuple[] | undefined) ?? []));
+    const routes = uniqueRoutes(sortRoutesByTypeId(((stop as StopTupleDetailed)[EStopTuple.routes] as RouteTuple[] | undefined) ?? []));
     const types = sortTypes(stop[EStopTuple.vehicleTypes].length ? stop[EStopTuple.vehicleTypes] : routes.map((route) => route[ERouteTuple.routeType]));
     const more = routes.length > MAX_CHIPS;
     const shown = more && !expanded ? routes.slice(0, MAX_CHIPS) : routes;

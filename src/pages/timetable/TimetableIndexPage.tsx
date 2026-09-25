@@ -7,7 +7,7 @@ import { cityGet } from "@/api/client";
 import { ERouteTuple, EStopTuple, type RouteTuple, type StopTuple } from "@/api/types";
 import { useApi } from "@/api/useApi";
 import { PageHeader, PageTemplate } from "@/components/PageHeader";
-import { ExpandableText, RouteGrid, routeLink, ShareUrl, sortRoutes, sortTypes, stopLink, TypeFilter, typeReadableKey, uniqueRoutes, useThemeMode, useUrlTab } from "@/components/timetable/common";
+import { ExpandableText, RouteGrid, routeLink, ShareUrl, sortRoutes, sortTypes, stopLink, TypeFilter, typeReadableKey, uniqueRoutes, useThemeMode, useUrlTab, agencyNameOf } from "@/components/timetable/common";
 import { SearchStatus, StopList, StopSearchField, useDebounced, useStopSearch } from "@/components/timetable/StopSearch";
 import { useRecentStops } from "@/components/timetable/recentStops";
 import { LineSearchField } from "@/components/timetable/SearchField";
@@ -97,7 +97,7 @@ export default function TimetableIndexPage() {
     const { t } = useTranslation();
     const [tab, setTab] = useUrlTab("tab", TABS, "route_id");
     const routes = useApi((signal) => cityGet<RouteTuple[]>(city, "/routes", undefined, signal), [city]);
-    const agencyName = cityInfo?.agencies?.default?.name ?? cityInfo?.name ?? "";
+    const agencyName = agencyNameOf(city, cityInfo);
     const typeNames = useMemo(() => sortTypes((routes.data ?? []).map((route) => route[ERouteTuple.routeType])).map((type) => t(typeReadableKey(type))), [routes.data, t]);
     const title = `${t("timetables.pageTitleMain")} ${agencyName}${typeNames.length ? ` - ${typeNames.join(", ")}` : ""}`;
 

@@ -65,11 +65,11 @@ import { fetchCityAlerts } from "@/components/alerts/api";
 import { DepartureRow, VehicleExtrasContext } from "@/components/departures/DepartureRow";
 import { useNow } from "@/components/departures/departureUtils";
 import { DelayChip, ListRow, RouteNameBadge, ShowMoreButton, VehicleTypeChip } from "@/components/departures/parts";
-import { useVehicleExtras } from "@/components/map/hooks";
+import { useDepartureVehicles } from "@/components/departures/useDepartureVehicles";
 import { vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
 import { useStopDepartures } from "@/components/departures/useStopDepartures";
 import { PageHeader, PageTemplate } from "@/components/PageHeader";
-import { RouteButton, ShareIconAuto, sortRoutes, uniqueRoutes, useShare } from "@/components/timetable/common";
+import { RouteButton, ShareIconAuto, sortRoutes, uniqueRoutes, useShare, agencyNameOf } from "@/components/timetable/common";
 import { LineSearchField } from "@/components/timetable/SearchField";
 import { SearchStatus, StopItemContent, StopSearchField, useDebounced, useStopSearch } from "@/components/timetable/StopSearch";
 import { useRouteVehicles } from "@/components/timetable/useRouteVehicles";
@@ -1404,7 +1404,7 @@ export default function FavouritesPage() {
     const cityInfo = useCity(city);
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const agencyName = cityInfo?.agencies?.default?.name ?? cityInfo?.name ?? "";
+    const agencyName = agencyNameOf(city, cityInfo);
     const { groups, addGroup, replaceGroups } = useFavouriteGroups(city);
     const [creating, setCreating] = useState(false);
     const [importing, setImporting] = useState(false);
@@ -1413,7 +1413,7 @@ export default function FavouritesPage() {
     const { toast, node } = useToast();
     const handled = useRef("");
     const allExpanded = groups.length === 0 || groups.every((group) => group.expanded);
-    const extras = useVehicleExtras(city, groups.length > 0, 30000);
+    const extras = useDepartureVehicles(city, groups.length > 0, 30000);
 
     const clearShared = () => {
         const url = new URL(window.location.href);
@@ -1446,82 +1446,82 @@ export default function FavouritesPage() {
         <PageTemplate title={`${agencyName} - ${t("favourites.pageTitle")}`} padding>
             <PageHeader documentTitle={`${agencyName} - ${t("favourites.pageTitle")}`} />
             <ExtrasContext.Provider value={extras}>
-            <Box style={{ padding: "0 0 80px" }}>
-                <Box sx={{ mb: 6 }}>
-                    <PageDescription agencyName={cityInfo?.name ?? city} />
-                    <Divider sx={{ my: 3 }} />
-                    <Box>
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-                            <Typography variant="body1">{t("favourites.favouriteGroups")}</Typography>
-                            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                                {groups.length > 0 && (
+                <Box style={{ padding: "0 0 80px" }}>
+                    <Box sx={{ mb: 6 }}>
+                        <PageDescription agencyName={cityInfo?.name ?? city} />
+                        <Divider sx={{ my: 3 }} />
+                        <Box>
+                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+                                <Typography variant="body1">{t("favourites.favouriteGroups")}</Typography>
+                                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                                    {groups.length > 0 && (
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => replaceGroups(groups.map((group) => ({ ...group, expanded: !allExpanded })))}
+                                            title={t(allExpanded ? "favourites.collapseAllGroups" : "favourites.expandAllGroups")}
+                                        >
+                                            {allExpanded ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
+                                        </IconButton>
+                                    )}
                                     <IconButton
                                         size="small"
-                                        onClick={() => replaceGroups(groups.map((group) => ({ ...group, expanded: !allExpanded })))}
-                                        title={t(allExpanded ? "favourites.collapseAllGroups" : "favourites.expandAllGroups")}
+                                        onClick={() => {
+                                            setCreating(false);
+                                            setImporting(true);
+                                        }}
+                                        title={t("global.import")}
                                     >
-                                        {allExpanded ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
+                                        <GetAppIcon />
                                     </IconButton>
-                                )}
-                                <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                        setCreating(false);
-                                        setImporting(true);
-                                    }}
-                                    title={t("global.import")}
-                                >
-                                    <GetAppIcon />
-                                </IconButton>
-                                <Button
-                                    variant="contained"
-                                    size="small"
-                                    startIcon={<AddIcon />}
-                                    onClick={() => {
-                                        setImporting(false);
-                                        setCreating(true);
-                                    }}
-                                >
-                                    {t("global.create")}
-                                </Button>
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        startIcon={<AddIcon />}
+                                        onClick={() => {
+                                            setImporting(false);
+                                            setCreating(true);
+                                        }}
+                                    >
+                                        {t("global.create")}
+                                    </Button>
+                                </Box>
                             </Box>
+                            {creating && <CreateGroupForm city={city} onClose={() => setCreating(false)} onCreate={add} />}
+                            {importing && <ImportForm city={city} onClose={() => setImporting(false)} onImport={(group) => add({ id: Date.now(), name: group.name, items: group.items, expanded: true })} />}
+                            {groups.length === 0 && !creating && !importing ? (
+                                <EmptyState title={t("favourites.noGroups")} subtitle={t("favourites.addFirstGroup")} />
+                            ) : (
+                                groups.map((group, index) => <GroupCard key={group.id} city={city} group={group} index={index} count={groups.length} toast={toast} />)
+                            )}
+                            <SharedGroupDialog
+                                open={!!shared}
+                                group={shared}
+                                onClose={() => {
+                                    setShared(null);
+                                    clearShared();
+                                }}
+                                onAccept={() => {
+                                    if (shared) add({ id: Date.now(), name: shared.name, items: shared.items, expanded: true });
+                                    setShared(null);
+                                    clearShared();
+                                }}
+                            />
+                            <WrongCityDialog
+                                open={!!mismatch}
+                                name={mismatch?.name ?? ""}
+                                targetCity={mismatch?.city ?? null}
+                                onClose={() => {
+                                    setMismatch(null);
+                                    clearShared();
+                                }}
+                                onSwitch={() => {
+                                    if (!mismatch) return;
+                                    window.location.href = `/${mismatch.city}/ulubione${window.location.search}`;
+                                }}
+                            />
                         </Box>
-                        {creating && <CreateGroupForm city={city} onClose={() => setCreating(false)} onCreate={add} />}
-                        {importing && <ImportForm city={city} onClose={() => setImporting(false)} onImport={(group) => add({ id: Date.now(), name: group.name, items: group.items, expanded: true })} />}
-                        {groups.length === 0 && !creating && !importing ? (
-                            <EmptyState title={t("favourites.noGroups")} subtitle={t("favourites.addFirstGroup")} />
-                        ) : (
-                            groups.map((group, index) => <GroupCard key={group.id} city={city} group={group} index={index} count={groups.length} toast={toast} />)
-                        )}
-                        <SharedGroupDialog
-                            open={!!shared}
-                            group={shared}
-                            onClose={() => {
-                                setShared(null);
-                                clearShared();
-                            }}
-                            onAccept={() => {
-                                if (shared) add({ id: Date.now(), name: shared.name, items: shared.items, expanded: true });
-                                setShared(null);
-                                clearShared();
-                            }}
-                        />
-                        <WrongCityDialog
-                            open={!!mismatch}
-                            name={mismatch?.name ?? ""}
-                            targetCity={mismatch?.city ?? null}
-                            onClose={() => {
-                                setMismatch(null);
-                                clearShared();
-                            }}
-                            onSwitch={() => {
-                                if (!mismatch) return;
-                                window.location.href = `/${mismatch.city}/ulubione${window.location.search}`;
-                            }}
-                        />
                     </Box>
                 </Box>
-            </Box>
             </ExtrasContext.Provider>
             {node}
         </PageTemplate>

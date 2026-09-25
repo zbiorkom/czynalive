@@ -20,6 +20,7 @@ import {
     Typography,
     type SxProps,
     type Theme,
+    type TypographyProps,
 } from "@mui/material";
 import { forwardRef, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
@@ -96,7 +97,7 @@ const applyMarquee = (container: HTMLElement, text: HTMLElement) => {
 };
 
 // MarqueeText: single line that slides back and forth when it does not fit.
-export const MarqueeText = forwardRef<HTMLElement, { text: ReactNode; sectionWidth?: number; variant?: "body2" | "caption" | "body1"; fontWeight?: number | string; sx?: SxProps<Theme> }>(
+export const MarqueeText = forwardRef<HTMLElement, { text: ReactNode; sectionWidth?: number; variant?: TypographyProps["variant"]; fontWeight?: number | string; sx?: SxProps<Theme> }>(
     ({ text, sectionWidth, variant = "body2", fontWeight, sx }, forwarded) => {
         const own = useRef<HTMLElement | null>(null);
         const textRef = useRef<HTMLSpanElement | null>(null);

@@ -3,8 +3,8 @@ import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { EDeparture, EStopDepartureTuple, ETripTuple, type StopDepartureTuple } from "@/api/types";
 import { useSettings } from "@/store/settings";
-import { useVehicleExtras } from "@/components/map/hooks";
 import { DepartureRow, VehicleExtrasContext } from "./DepartureRow";
+import { useDepartureVehicles } from "./useDepartureVehicles";
 import { useNow } from "./departureUtils";
 import { useStopDepartures } from "./useStopDepartures";
 
@@ -30,7 +30,7 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 10, compact
     const [active, setActive] = useState<number | null>(null);
     const { departures, error } = useStopDepartures(city, stopId, { limit, routes });
     const provided = useContext(VehicleExtrasContext);
-    const ownExtras = useVehicleExtras(city, provided === null);
+    const ownExtras = useDepartureVehicles(city, provided === null);
 
     useEffect(() => setLimit(initialLimit), [city, stopId, initialLimit]);
     useEffect(() => setLoadingMore(false), [departures]);
@@ -63,43 +63,43 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 10, compact
 
     return (
         <VehicleExtrasContext.Provider value={provided ?? ownExtras}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            {departures.map((departure, index) => (
-                <DepartureRow
-                    key={`${departure[EStopDepartureTuple.trip][ETripTuple.tripId]}-${departure[EStopDepartureTuple.departure][EDeparture.scheduledDeparture]}`}
-                    city={mapCity ?? city}
-                    departure={departure}
-                    now={now}
-                    compact={compact}
-                    showBrigade={settings.departuresShowBrigade}
-                    showVehicleNo={settings.departuresShowVehicleNo}
-                    active={index === active}
-                    onSelect={
-                        onSelect
-                            ? (selected) => {
-                                  setActive(index);
-                                  onSelect(selected);
-                              }
-                            : undefined
-                    }
-                />
-            ))}
-            {showMore && limit < MAX_LIMIT && departures.length >= limit && (
-                <Button
-                    variant="outlined"
-                    fullWidth
-                    disabled={loadingMore}
-                    sx={{ mt: 4 }}
-                    className="text-default-text"
-                    onClick={() => {
-                        setLoadingMore(true);
-                        setLimit((value) => Math.min(MAX_LIMIT, value + 10));
-                    }}
-                >
-                    {loadingMore ? `${t("global.loading")}...` : t("stopDetails.showLaterSchedules")}
-                </Button>
-            )}
-        </Box>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                {departures.map((departure, index) => (
+                    <DepartureRow
+                        key={`${departure[EStopDepartureTuple.trip][ETripTuple.tripId]}-${departure[EStopDepartureTuple.departure][EDeparture.scheduledDeparture]}`}
+                        city={mapCity ?? city}
+                        departure={departure}
+                        now={now}
+                        compact={compact}
+                        showBrigade={settings.departuresShowBrigade}
+                        showVehicleNo={settings.departuresShowVehicleNo}
+                        active={index === active}
+                        onSelect={
+                            onSelect
+                                ? (selected) => {
+                                      setActive(index);
+                                      onSelect(selected);
+                                  }
+                                : undefined
+                        }
+                    />
+                ))}
+                {showMore && limit < MAX_LIMIT && departures.length >= limit && (
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        disabled={loadingMore}
+                        sx={{ mt: 4 }}
+                        className="text-default-text"
+                        onClick={() => {
+                            setLoadingMore(true);
+                            setLimit((value) => Math.min(MAX_LIMIT, value + 10));
+                        }}
+                    >
+                        {loadingMore ? `${t("global.loading")}...` : t("stopDetails.showLaterSchedules")}
+                    </Button>
+                )}
+            </Box>
         </VehicleExtrasContext.Provider>
     );
 };

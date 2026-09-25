@@ -89,6 +89,7 @@ export const MapSheet = ({ open, header, children, initialFraction = 0.5, classN
     const onPointerUp = () => {
         const began = start.current;
         start.current = null;
+        if (began && drag === null) setFraction(SNAPS[0]);
         if (!began || drag === null) return setDrag(null);
         const target = SNAPS.reduce((best, value) => (Math.abs(value * viewport - drag) < Math.abs(best * viewport - drag) ? value : best), SNAPS[0]);
         setFraction(target);
@@ -129,6 +130,9 @@ export const MapSheet = ({ open, header, children, initialFraction = 0.5, classN
                         onPointerMove={onPointerMove}
                         onPointerUp={onPointerUp}
                         onPointerCancel={onPointerUp}
+                        onClick={(event) => {
+                            if ((event.target as HTMLElement).closest("[role=tab]")) setFraction(SNAPS[0]);
+                        }}
                     >
                         {header}
                     </div>
