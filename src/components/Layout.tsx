@@ -16,7 +16,8 @@ export const Layout = () => {
     let active = -1;
     let bestLength = -1;
     paths.forEach((path, index) => {
-        const matches = location.pathname === path || location.pathname.startsWith(path + "/");
+        const exactOnly = entries[index].key === "map";
+        const matches = location.pathname === path || (!exactOnly && location.pathname.startsWith(path + "/"));
         if (matches && path.length > bestLength) {
             active = index;
             bestLength = path.length;

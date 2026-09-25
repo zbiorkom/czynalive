@@ -18,8 +18,9 @@ export type Settings = {
     startLocations: Record<string, [lon: number, lat: number, zoom: number]>;
     lastMapLocations: Record<string, [lon: number, lat: number, zoom: number]>;
     bottomNav: BottomNavItem[];
-    mapStyle: "streets" | "satellite";
+    mapStyle: "streets" | "satellite" | "osm";
     mapFilters: Record<string, { routes: string[]; vehicleTypes: number[] }>;
+    brigadeSearchType: "ROUTE_ID/BRIGADE" | "BRIGADE/ROUTE_ID";
 };
 
 export const DEFAULT_BOTTOM_NAV: BottomNavItem[] = ["favourites", "alerts", "map", "timetable", "menu"];
@@ -42,6 +43,7 @@ export const settingsStore = createPersistedStore<Settings>("czynalive:settings"
     bottomNav: DEFAULT_BOTTOM_NAV,
     mapStyle: "streets",
     mapFilters: {},
+    brigadeSearchType: "ROUTE_ID/BRIGADE",
 });
 
 export const useSettings = settingsStore.useStore;

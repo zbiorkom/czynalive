@@ -21,7 +21,7 @@ export const PageHeader = ({ title, back, actions, documentTitle }: Props) => {
                         <ArrowBackIcon />
                     </IconButton>
                 )}
-                <Typography variant="h3" component="h1" sx={{ flex: 1, color: "inherit !important", fontSize: "1.1rem" }} noWrap>
+                <Typography variant="h3" component="h1" sx={{ flex: 1, color: "inherit !important", fontSize: "1.1rem !important" }} noWrap>
                     {title}
                 </Typography>
                 {actions}
