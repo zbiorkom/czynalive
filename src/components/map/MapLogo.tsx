@@ -3,7 +3,7 @@ export const MapLogo = ({ bottom }: { bottom: number }) => (
     <div className="mapgl-bottom-left czynaczas-logo-control">
         <div className="mapgl-control mapgl-bar mapgl-controls" style={{ display: "block", bottom, border: 0 }}>
             <svg width="92" height="30" viewBox="0 0 92 30" role="img" aria-label="Czynalive Logo" style={{ opacity: 0.7, display: "block" }}>
-                <rect x="1" y="1" width="90" height="28" rx="8" fill="#ffffff" stroke="#29a847" strokeWidth="1.5" />
+                <rect x="1" y="1" width="90" height="28" rx="8" fill="var(--default-bg)" stroke="var(--primary)" strokeWidth="1.5" />
                 <g transform="translate(6 6) scale(0.28)">
                     <rect width="64" height="64" rx="14" fill="#29a847" />
                     <path
@@ -11,7 +11,7 @@ export const MapLogo = ({ bottom }: { bottom: number }) => (
                         fill="#fff"
                     />
                 </g>
-                <text x="27" y="20" fontFamily="Roboto, Arial, sans-serif" fontSize="13" fontWeight="700" fontStyle="italic" fill="#29a847">
+                <text x="27" y="20" fontFamily="Roboto, Arial, sans-serif" fontSize="13" fontWeight="700" fontStyle="italic" fill="var(--primary)">
                     czynalive
                 </text>
             </svg>

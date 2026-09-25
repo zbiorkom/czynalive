@@ -141,7 +141,7 @@ export default function AlertPage() {
     const alert = data?.alerts.find((entry) => entry.id === id);
 
     useEffect(() => {
-        document.querySelector(".app-content")?.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior: "smooth" });
     }, []);
 
     const pageTitle = `${cityInfo?.name ?? city} - ${t("alerts.pageTitleAlerts")}`;

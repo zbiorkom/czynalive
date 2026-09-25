@@ -326,7 +326,9 @@ export default function MapPage() {
 
     // Data.
     const viewport = useViewport(map);
-    const selectionActive = !!vehicleId || !!tripId;
+    const [stopDeparture, setStopDeparture] = useState<StopDepartureTuple | null>(null);
+    const stopVehicle = stopId ? (stopDeparture?.[EStopDepartureTuple.vehicle] ?? null) : null;
+    const selectionActive = !!vehicleId || !!tripId || !!stopId;
     const features = useMapFeatures(city, viewport, filter.routes, !selectionActive && filter.vehicles.length === 0);
     const watched = useWatchedVehicles(city, selectionActive ? [] : filter.vehicles);
     const extras = useVehicleExtras(city, settings.colorByDelay);
@@ -347,10 +349,11 @@ export default function MapPage() {
     const visibleVehicles: VehiclePosition[] = useMemo(() => {
         if (vehicleId) return vehicleLive.position ? [vehicleLive.position as VehiclePosition] : [];
         if (tripId) return [];
+        if (stopId) return stopVehicle ? [stopVehicle] : [];
         const source = filter.vehicles.length ? watched : features.positions;
         if (!filter.vehicleTypes.length) return source;
         return source.filter((vehicle) => filter.vehicleTypes.includes(vehicle[EVehiclePosition.route][ERouteTuple.routeType]));
-    }, [vehicleId, tripId, vehicleLive.position, tripLive.position, features.positions, watched, filter.vehicleTypes.join(","), filter.vehicles.length]);
+    }, [vehicleId, tripId, stopId, stopVehicle, vehicleLive.position, tripLive.position, features.positions, watched, filter.vehicleTypes.join(","), filter.vehicles.length]);
 
     const dots = selectionActive || filter.vehicles.length || filter.vehicleTypes.length ? [] : features.dots;
     const markerOptions = {
@@ -411,12 +414,12 @@ export default function MapPage() {
     useEffect(() => {
         const stopLayer = stopLayerRef.current;
         if (!stopLayer) return;
-        let stops: StopTuple[] = features.stops;
-        if (selectedStop && !stops.some((stop) => stop[EStopTuple.stopId] === selectedStop[EStopTuple.stopId])) {
-            stops = [...stops, selectedStop.slice(0, 7) as StopTuple];
+        if (stopId) {
+            stopLayer.setStops(selectedStop ? [selectedStop.slice(0, 7) as StopTuple] : [], true);
+            return;
         }
-        stopLayer.setStops(stops, !overlay && (zoom >= STOPS_ZOOM || !!selectedStop));
-    }, [map, features.stops, overlay, zoom >= STOPS_ZOOM, selectedStop]);
+        stopLayer.setStops(features.stops, !overlay && zoom >= STOPS_ZOOM);
+    }, [map, features.stops, overlay, zoom >= STOPS_ZOOM, selectedStop, stopId]);
 
     useEffect(() => {
         stopLayerRef.current?.setTrip(overlay);
@@ -482,17 +485,19 @@ export default function MapPage() {
         }
     }, [tripId, overlay]);
 
-    const locateStop = useCallback(
-        (stop: StopTupleDetailed) => {
-            setSelectedStop(stop);
-            map?.flyTo({
-                center: stop[EStopTuple.location],
-                zoom: Math.max(map.getZoom(), 16),
-                duration: 700,
-            });
-        },
-        [map],
-    );
+    // Stop drawer: the stop and the vehicle of the highlighted departure, framed together.
+    const locateStop = useCallback((stop: StopTupleDetailed) => setSelectedStop(stop), []);
+    const stopVehicleKey = stopVehicle ? stopVehicle[EVehiclePosition.id] : "";
+    useEffect(() => {
+        if (!map || !selectedStop || !stopId) return;
+        const stopPoint = selectedStop[EStopTuple.location];
+        if (!stopVehicle) {
+            map.easeTo({ center: stopPoint, duration: 250 });
+            return;
+        }
+        const bounds = new maplibregl.LngLatBounds(stopPoint, stopPoint).extend(stopVehicle[EVehiclePosition.location]);
+        map.fitBounds(bounds, { padding: 70, maxZoom: 15, duration: 250 });
+    }, [map, selectedStop, stopId, stopVehicleKey]);
 
     // Geolocation.
     const geoWatch = useRef<number | null>(null);
@@ -572,13 +577,6 @@ export default function MapPage() {
     }, [vehicleLive.fatal]);
 
     const suggested = features.suggestedCity && features.suggestedCity !== dismissedSuggestion ? byId[features.suggestedCity] : undefined;
-
-    const onDepartureSelect = (departure: StopDepartureTuple) => {
-        const vehicle = departure[EStopDepartureTuple.vehicle];
-        const trip = departure[EStopDepartureTuple.trip];
-        if (vehicle) openEntity("pojazd", vehicle[EVehiclePosition.id], vehicle[EVehiclePosition.city], true);
-        else openEntity("kurs", trip[ETripTuple.tripId], trip[ETripTuple.city], true);
-    };
 
     const applyFilter = (value: MapFilter) => {
         setFavouritesMode(false);
@@ -676,7 +674,7 @@ export default function MapPage() {
                 </>
             )}
 
-            {stopId && !selectionActive && (
+            {stopId && !vehicleId && !tripId && (
                 <StopSheet
                     city={city}
                     stopCity={entityCity}
@@ -685,8 +683,8 @@ export default function MapPage() {
                     onClose={closeSheet}
                     onBack={goBack}
                     onLocate={locateStop}
-                    onDepartureSelect={onDepartureSelect}
-                    onHeightChange={(px, side) => setSheet({ px, side })}
+                    onDepartureActive={setStopDeparture}
+                    onHeightChange={sheetHeight}
                 />
             )}
             {vehicleId && (

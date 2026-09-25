@@ -3,19 +3,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { useCity } from "@/api/cities";
-import { ERouteTuple, ETripTuple, RouteType, type RouteTuple } from "@/api/types";
+import { ERouteTuple, ETripTuple, RouteType } from "@/api/types";
 import { useApi } from "@/api/useApi";
-import { ErrorBox, Loading } from "@/components/Loading";
-import { PageHeader } from "@/components/PageHeader";
-import { RouteBadge } from "@/components/RouteBadge";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
+import { RouteChip } from "@/components/departures/RouteChip";
 import { BrigadeData, BrigadeTable } from "@/components/brigades/BrigadeData";
-import { BrigadeSchedule, VehicleLink, type ScheduleRow } from "@/components/brigades/BrigadeSchedule";
+import { BrigadeSchedule, type ScheduleRow } from "@/components/brigades/BrigadeSchedule";
 import { fetchBrigadeTrips } from "@/components/brigades/data";
 import { DateTabs, formatDateLong, useBrigadeDate } from "@/components/brigades/DateTabs";
 import { tripEnd } from "@/components/brigades/format";
 import { ShareLink } from "@/components/brigades/ShareButton";
 import { useBrigadeLive } from "@/components/brigades/useBrigadeLive";
 import { VehicleTypeIcon } from "@/components/brigades/VehicleTypeIcon";
+import { useHeaderText } from "@/lib/shell";
+import { Skeleton } from "@mui/material";
 
 const LINE_LABELS: Record<number, string> = {
     [RouteType.Tram]: "global.lineTram",
@@ -29,6 +30,14 @@ const LINE_LABELS: Record<number, string> = {
 type TabKey = "schedule" | "brigade-data" | "brigade-table";
 const TABS: TabKey[] = ["schedule", "brigade-data", "brigade-table"];
 
+const Loader = () => (
+    <Box>
+        {[0, 1, 2].map((index) => (
+            <Skeleton key={index} animation="wave" variant="text" sx={{ mb: 2, width: "100%", height: "50px" }} />
+        ))}
+    </Box>
+);
+
 export default function BrigadePage({ multi = false }: { multi?: boolean }) {
     const { city = "", routeId = "", brigade = "" } = useParams();
     const cityInfo = useCity(city);
@@ -37,91 +46,98 @@ export default function BrigadePage({ multi = false }: { multi?: boolean }) {
     const [now, setNow] = useState(Date.now());
     const { dates, selected, setDate, isToday, timeZone, loading: datesLoading } = useBrigadeDate(city);
     const trips = useApi((signal) => fetchBrigadeTrips(city, routeId, brigade, selected, signal), [city, routeId, brigade, selected]);
-    const tripList = trips.data ?? [];
-    const tripIds = useMemo(() => tripList.map((trip) => trip[ETripTuple.tripId]), [trips.data]);
+    const allTrips = trips.data ?? [];
+    const ownRoute = allTrips.find((trip) => trip[ETripTuple.route][ERouteTuple.routeId] === routeId)?.[ETripTuple.route] ?? allTrips[0]?.[ETripTuple.route];
+    const lineName = ownRoute?.[ERouteTuple.routeName] ?? routeId;
+    const tripList = useMemo(() => (multi ? allTrips : allTrips.filter((trip) => trip[ETripTuple.route][ERouteTuple.routeName] === lineName)), [trips.data, multi, lineName]);
+    const tripIds = useMemo(() => tripList.map((trip) => trip[ETripTuple.tripId]), [tripList]);
     const vehicles = useBrigadeLive(city, routeId, brigade, tripIds, isToday && tripList.length > 0);
+
+    useHeaderText(`${t("global.route_id")} ${lineName}, ${t("global.brigade")} ${brigade}`);
 
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 30000);
         return () => clearInterval(timer);
     }, []);
 
-    const ownRoute: RouteTuple | undefined =
-        tripList.find((trip) => trip[ETripTuple.route][ERouteTuple.routeId] === routeId)?.[ETripTuple.route] ?? tripList[0]?.[ETripTuple.route];
     const lines = useMemo(() => {
-        const map = new Map<string, RouteTuple>();
-        for (const trip of tripList) map.set(trip[ETripTuple.route][ERouteTuple.routeId], trip[ETripTuple.route]);
-        return [...map.values()].sort((a, b) => a[ERouteTuple.routeName].localeCompare(b[ERouteTuple.routeName], undefined, { numeric: true }));
-    }, [trips.data]);
+        const map = new Map<string, { name: string; brigade: string; type: number }>();
+        for (const trip of tripList) {
+            const route = trip[ETripTuple.route];
+            map.set(`${route[ERouteTuple.routeName]}|${trip[ETripTuple.brigade]}`, { name: route[ERouteTuple.routeName], brigade: trip[ETripTuple.brigade], type: route[ERouteTuple.routeType] });
+        }
+        return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }, [tripList]);
     const isMulti = lines.length > 1;
+    const isMultiBrigade = new Set(lines.map((line) => line.brigade)).size > 1;
 
     const rows: ScheduleRow[] = useMemo(() => {
         const byTrip = new Map(vehicles.filter((vehicle) => vehicle.tripId).map((vehicle) => [vehicle.tripId!, vehicle]));
         const base = tripList.map((trip) => ({ trip, vehicle: byTrip.get(trip[ETripTuple.tripId]) ?? null, active: false }));
         if (!isToday) return base;
-        const withVehicle = base.filter((row) => row.vehicle);
-        if (withVehicle.length) {
-            for (const row of withVehicle) row.active = true;
+        if (base.some((row) => row.vehicle)) {
+            for (const row of base) row.active = !!row.vehicle;
             return base;
         }
-        const closest = base.findIndex((row) => now < tripEnd(row.trip));
-        if (closest !== -1) base[closest].active = true;
-        return base;
-    }, [trips.data, vehicles, isToday, now]);
-    const unmatchedVehicles = vehicles.filter((vehicle) => !rows.some((row) => row.vehicle?.vehicleId === vehicle.vehicleId));
+        return base.map((row, index) => ({ ...row, active: index === 0 ? now < tripEnd(row.trip) : now > tripEnd(base[index - 1].trip) && now < tripEnd(row.trip) }));
+    }, [tripList, vehicles, isToday, now]);
 
-    const lineName = ownRoute?.[ERouteTuple.routeName] ?? routeId;
-    const agency = ownRoute ? cityInfo?.agencies?.[ownRoute[ERouteTuple.routeAgency]]?.name ?? cityInfo?.agencies?.default?.name : cityInfo?.agencies?.default?.name;
+    const agency = ownRoute ? (cityInfo?.agencies?.[ownRoute[ERouteTuple.routeAgency]]?.name ?? cityInfo?.agencies?.default?.name) : cityInfo?.agencies?.default?.name;
     const type = ownRoute?.[ERouteTuple.routeType] ?? RouteType.Bus;
-    const title = `${t("global.route_id")} ${lineName}, ${t("global.brigade").toLowerCase()} ${brigade}`;
+    const cityName = cityInfo?.name ?? city;
 
     return (
-        <>
-            <PageHeader
-                title={title}
-                back={multi ? `/${city}/laczony-rozklad-jazdy-brygady` : `/${city}/rozklad-jazdy-brygady`}
-                documentTitle={`${t("brigadeSchedule.pageTitleBrigadeSchedule", { route_id: lineName, brigade })} ${cityInfo?.name ?? city}`}
-            />
-            <div className="page">
-                <Box sx={{ display: "flex", alignItems: "center", gap: "10px", mb: 1.25 }}>
+        <PageTemplate title={`${cityName} - ${t("brigadeScheduleList.brigadeSchedule")}`} padding>
+            <PageHeader documentTitle={`${t("brigadeSchedule.pageTitleBrigadeSchedule", { route_id: lineName, brigade })} ${agency ?? cityName}`} />
+            <div>
+                <Box sx={{ display: "flex", placeItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <VehicleTypeIcon type={type} size={48} />
                     <div>
                         <Typography variant="h6">
                             <strong>
                                 {t(LINE_LABELS[type] ?? "global.lineBus")} {lineName}
-                            </strong>
-                            {agency ? ` - ${agency}` : ""}
+                            </strong>{" "}
+                            - {agency}
                         </Typography>
                         <Typography variant="h5">
                             <strong>
                                 {t("global.brigade")} {brigade}
                             </strong>
                         </Typography>
+                        {isMulti && (
+                            <Box sx={{ display: "flex", gap: 1, flexDirection: "column" }}>
+                                <Typography variant="h5">
+                                    <strong>{t("brigadeSchedule.mergedWithLines")}:</strong>
+                                </Typography>
+                                <Box sx={{ display: "flex", gap: 1 }}>
+                                    {lines.map((line) => (
+                                        <RouteChip key={`${line.name}-${line.brigade}`} name={line.name} type={line.type} brigade={isMultiBrigade ? line.brigade : undefined} animate={false} />
+                                    ))}
+                                </Box>
+                            </Box>
+                        )}
                     </div>
                 </Box>
-                {isMulti && (
-                    <Box sx={{ display: "flex", gap: 1, flexDirection: "column", mb: 1 }}>
-                        <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                            {t("brigadeSchedule.mergedWithLines")}:
-                        </Typography>
-                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                            {lines.map((line) => (
-                                <RouteBadge key={line[ERouteTuple.routeId]} route={line} />
-                            ))}
-                        </Box>
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                    <Box
+                        style={{ overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 1, whiteSpace: "pre-wrap", lineHeight: "34px" }}
+                        sx={{ flexDirection: "column" }}
+                    >
+                        <ShareLink title={`${cityName} ${t("brigadeSchedule.shareUrlDescription", { route_id: lineName, brigade })}`} />
                     </Box>
-                )}
-                <ShareLink title={`${cityInfo?.name ?? ""} ${t("brigadeSchedule.shareUrlDescription", { route_id: lineName, brigade })}`} />
+                </Box>
 
-                {!(datesLoading && !dates.length) && <DateTabs dates={dates} selected={selected} onChange={setDate} />}
+                {datesLoading && !dates.length ? null : <DateTabs dates={dates} selected={selected} onChange={setDate} />}
 
                 {trips.loading && !trips.data ? (
-                    <Loading />
+                    <Loader />
                 ) : trips.error ? (
-                    <ErrorBox error={trips.error} onRetry={trips.reload} />
+                    <Typography variant="body2" noWrap style={{ margin: "5px 0" }}>
+                        {t("global.error")}
+                    </Typography>
                 ) : tripList.length === 0 ? (
-                    <Box sx={{ my: 1.25 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    <div>
+                        <Typography variant="subtitle2" noWrap style={{ margin: "10px 0" }}>
                             {t("global.nothingFound")}
                         </Typography>
                         <Typography variant="subtitle2">
@@ -133,7 +149,7 @@ export default function BrigadePage({ multi = false }: { multi?: boolean }) {
                         <Typography variant="subtitle2">
                             {t("global.date")}: {formatDateLong(selected)}
                         </Typography>
-                    </Box>
+                    </div>
                 ) : (
                     <>
                         <Tabs
@@ -150,31 +166,30 @@ export default function BrigadePage({ multi = false }: { multi?: boolean }) {
                                     key={key}
                                     value={key}
                                     label={t(
-                                        key === "schedule"
-                                            ? "brigadeSchedule.tabBrigadeSchedule"
-                                            : key === "brigade-data"
-                                              ? "brigadeSchedule.tabBrigadeData"
-                                              : "brigadeSchedule.tabBrigadeSimplified",
+                                        key === "schedule" ? "brigadeSchedule.tabBrigadeSchedule" : key === "brigade-data" ? "brigadeSchedule.tabBrigadeData" : "brigadeSchedule.tabBrigadeSimplified",
                                     )}
                                 />
                             ))}
                         </Tabs>
-                        {unmatchedVehicles.length > 0 && tab === "schedule" && (
-                            <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
-                                <Typography variant="body2" sx={{ textAlign: "center", fontWeight: 500 }}>
-                                    {t("brigadeSchedule.vehicleOnBrigade")}:
-                                </Typography>
-                                {unmatchedVehicles.map((vehicle) => (
-                                    <VehicleLink key={vehicle.vehicleId} city={city} vehicle={vehicle} translationKey="brigadeSchedule.goToVehicleFromBrigade" />
-                                ))}
-                            </Box>
-                        )}
-                        {tab === "schedule" && <BrigadeSchedule city={city} rows={rows} timeZone={timeZone} multi={isMulti} />}
-                        {tab === "brigade-data" && <BrigadeData city={city} rows={rows} lines={lines} timeZone={timeZone} />}
-                        {tab === "brigade-table" && <BrigadeTable rows={rows} multi={isMulti} timeZone={timeZone} />}
+                        <div role="tabpanel">
+                            {tab === "schedule" && <BrigadeSchedule city={city} rows={rows} timeZone={timeZone} multi={isMulti} multiBrigade={isMultiBrigade} />}
+                            {tab === "brigade-data" && <BrigadeData city={city} rows={rows} lines={lines} timeZone={timeZone} multiBrigade={isMultiBrigade} />}
+                            {tab === "brigade-table" && (
+                                <BrigadeTable
+                                    rows={rows}
+                                    multi={isMulti}
+                                    timeZone={timeZone}
+                                    header={{
+                                        title: `${t("global.route_id")} ${lineName}, ${t("global.brigade")} ${brigade} - ${agency ?? cityName}`,
+                                        merged: isMulti ? lines.map((line) => line.name).join(", ") : undefined,
+                                        date: formatDateLong(selected),
+                                    }}
+                                />
+                            )}
+                        </div>
                     </>
                 )}
             </div>
-        </>
+        </PageTemplate>
     );
 }

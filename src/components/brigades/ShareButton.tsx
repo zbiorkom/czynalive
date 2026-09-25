@@ -22,7 +22,7 @@ export const ShareLink = ({ title }: { title: string }) => {
     };
 
     return (
-        <Typography variant="caption" component="div" sx={{ display: "flex", alignItems: "center" }}>
+        <Typography variant="caption" data-nosnippet>
             {t("global.shareUrl")}:
             <IconButton size="small" color="primary" onClick={share} aria-label={t("global.share")}>
                 <ShareIcon fontSize="small" />
