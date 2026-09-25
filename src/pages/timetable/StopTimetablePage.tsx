@@ -165,7 +165,7 @@ export default function StopTimetablePage() {
                 </Tabs>
                 {tab === "departures" ? (
                     <Box sx={{ mt: 1 }}>
-                        <LiveDepartures city={dataCity} stopId={stopId} routes={routeId ? [routeId] : undefined} />
+                        <LiveDepartures city={dataCity} mapCity={city} stopId={stopId} routes={routeId ? [routeId] : undefined} />
                     </Box>
                 ) : !routeId ? (
                     <Box sx={{ mt: 1 }}>

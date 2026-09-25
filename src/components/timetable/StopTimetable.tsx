@@ -80,7 +80,7 @@ export const StopTimetable = ({ city, data, routeName, routeType, stopName, city
         if (!days.includes(day) && days.length) setDay(days.includes(today) ? today : days[0]);
     }, [days]);
 
-    const rows = data.timetable[String(day)] ?? [];
+    const rows = useMemo(() => (data.timetable[String(day)] ?? []).filter((row) => (row[2] & ALIGHT.Forbidden) === 0), [data, day]);
     const hasExitOnly = rows.some((row) => isExitOnly(row[2]));
 
     const hours = useMemo(() => {
@@ -117,7 +117,7 @@ export const StopTimetable = ({ city, data, routeName, routeType, stopName, city
     const countFor = (weekdays: number[]) => {
         const index = days.find((d) => weekdays.includes(weekdayOf(d)));
         if (index === undefined) return 0;
-        return (data.timetable[String(index)] ?? []).filter((row) => !isExitOnly(row[2])).length;
+        return (data.timetable[String(index)] ?? []).filter((row) => !isExitOnly(row[2]) && (row[2] & ALIGHT.Forbidden) === 0).length;
     };
 
     const allExitOnly = rows.length > 0 && !showExitOnly && rows.every((row) => isExitOnly(row[2]));

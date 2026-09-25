@@ -153,12 +153,20 @@ export const RouteDiagram = ({ city, routeType, direction, minutes, positions, p
             {rows.map((row) => {
                 const isBranch = row.branch >= 0;
                 const lineLeft = 50 + CIRCLE / 2 - LINE / 2;
-                const trunkLine = (
-                    <>
-                        {row.trunkAbove && <Box sx={{ position: "absolute", left: lineLeft, top: 0, height: "50%", borderLeft: `${LINE * 2}px solid ${color}` }} />}
-                        {row.trunkBelow && <Box sx={{ position: "absolute", left: lineLeft, top: "50%", height: "50%", borderLeft: `${LINE * 2}px solid ${color}` }} />}
-                    </>
-                );
+                const trunkLine =
+                    row.trunkAbove || row.trunkBelow ? (
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                left: lineLeft - LINE / 2,
+                                width: LINE * 2,
+                                top: row.trunkAbove ? 0 : "50%",
+                                bottom: row.trunkBelow ? "-1px" : "50%",
+                                backgroundColor: color,
+                                zIndex: 1,
+                            }}
+                        />
+                    ) : null;
                 if (row.kind === "collapsed") {
                     return (
                         <ListItem key={row.key} disablePadding dense divider sx={{ position: "relative" }}>

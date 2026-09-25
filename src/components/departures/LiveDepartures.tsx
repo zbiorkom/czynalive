@@ -15,11 +15,12 @@ type Props = {
     routes?: string[];
     showMore?: boolean;
     onSelect?: (departure: StopDepartureTuple) => void;
+    mapCity?: string;
 };
 
 const MAX_LIMIT = 100;
 
-export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact, routes, showMore = true, onSelect }: Props) => {
+export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact, routes, showMore = true, onSelect, mapCity }: Props) => {
     const { t } = useTranslation();
     const [settings] = useSettings();
     const [limit, setLimit] = useState(initialLimit);
@@ -61,7 +62,7 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact
             {departures.map((departure) => (
                 <DepartureRow
                     key={`${departure[EStopDepartureTuple.trip][ETripTuple.tripId]}-${departure[EStopDepartureTuple.departure][EDeparture.scheduledDeparture]}`}
-                    city={city}
+                    city={mapCity ?? city}
                     departure={departure}
                     now={now}
                     compact={compact}

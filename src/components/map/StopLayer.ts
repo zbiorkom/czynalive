@@ -1,3 +1,4 @@
+import type { Feature, FeatureCollection } from "geojson";
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import { EStopTuple, type Point, type StopTuple } from "@/api/types";
 import { stopArrowId, stopIconId, tripStopId } from "./canvasImages";
@@ -10,7 +11,7 @@ const TRIP_STOPS = "cnc-trip-stops";
 
 export const STOPS_ZOOM = 14;
 
-const collection = (features: GeoJSON.Feature[] = []): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features });
+const collection = (features: Feature[] = []): FeatureCollection => ({ type: "FeatureCollection", features });
 
 const stopColors = (stop: StopTuple) => {
     const types = [...new Set(stop[EStopTuple.vehicleTypes].map(typeClass))].slice(0, 2);
@@ -118,8 +119,8 @@ export class StopLayer {
 
     private render = () => {
         const map = this.map;
-        const stopFeatures: GeoJSON.Feature[] = [];
-        const arrowFeatures: GeoJSON.Feature[] = [];
+        const stopFeatures: Feature[] = [];
+        const arrowFeatures: Feature[] = [];
         if (this.visible) {
             for (const stop of this.stops) {
                 const colors = stopColors(stop);
@@ -144,8 +145,8 @@ export class StopLayer {
         (map.getSource(STOPS) as GeoJSONSource | undefined)?.setData(collection(stopFeatures));
         (map.getSource(ARROWS) as GeoJSONSource | undefined)?.setData(collection(arrowFeatures));
 
-        const lineFeatures: GeoJSON.Feature[] = [];
-        const tripStopFeatures: GeoJSON.Feature[] = [];
+        const lineFeatures: Feature[] = [];
+        const tripStopFeatures: Feature[] = [];
         if (this.trip && this.trip.shape.length > 1) {
             const { shape, passedIndex, color, stops } = this.trip;
             const split = Math.max(0, Math.min(shape.length - 1, passedIndex));

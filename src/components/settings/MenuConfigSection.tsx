@@ -1,5 +1,6 @@
+import Grid from "@mui/material/Grid2";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
-import { Alert, Badge, BottomNavigation, BottomNavigationAction, Box, Button, Divider, Grid, Typography } from "@mui/material";
+import { Alert, Badge, BottomNavigation, BottomNavigationAction, Box, Button, Divider, Typography } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NAV_ENTRIES } from "@/lib/navigation";
@@ -9,8 +10,9 @@ import { rebrand } from "./SimpleSections";
 const FIXED: BottomNavItem[] = ["map", "menu"];
 
 export const MenuConfigSection = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [settings, setSettings] = useSettings();
+    const label = (key: string) => (i18n.exists(key) ? t(key) : t("cancelledTrips.menuTitle"));
     const [config, setConfig] = useState<BottomNavItem[]>(settings.bottomNav);
     const [selected, setSelected] = useState<BottomNavItem | null>(null);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -71,7 +73,7 @@ export const MenuConfigSection = () => {
                                     entry.icon
                                 )}
                             </Box>
-                            <Typography variant="caption">{t(entry.titleKey)}</Typography>
+                            <Typography variant="caption">{label(entry.titleKey)}</Typography>
                         </Grid>
                     );
                 })}
@@ -96,7 +98,7 @@ export const MenuConfigSection = () => {
                     return (
                         <BottomNavigationAction
                             key={key}
-                            label={t(entry.titleKey)}
+                            label={label(entry.titleKey)}
                             disabled={!replaceable || !selected}
                             onClick={() => replace(key)}
                             sx={{ minWidth: 0, px: 0.5, opacity: !replaceable ? 0.5 : 1 }}

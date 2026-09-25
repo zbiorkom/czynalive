@@ -7,7 +7,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useCity } from "@/api/cities";
 import { cityGet } from "@/api/client";
-import { ERouteTuple, EStopTuple, type Point, type RouteTuple, type StopTuple } from "@/api/types";
+import { ALIGHT, ERouteTuple, EStopTuple, type Point, type RouteTuple, type StopTuple } from "@/api/types";
 import { useApi } from "@/api/useApi";
 import { VehicleTypeIcon, vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
 import { PageHeader } from "@/components/PageHeader";
@@ -57,7 +57,7 @@ export default function RouteTimetablePage() {
     const tripRef = useMemo(() => {
         const rows = firstStopTimetable.data?.timetable[String(date)];
         if (!rows?.length) return undefined;
-        const usable = rows.filter((row) => !row[3]);
+        const usable = rows.filter((row) => (row[2] & (ALIGHT.AlightOnly | ALIGHT.IsLastStop)) === 0);
         const pool = usable.length ? usable : rows;
         const now = Date.now();
         return (pool.find((row) => row[1] >= now) ?? pool[0])[0];
@@ -66,15 +66,16 @@ export default function RouteTimetablePage() {
     const minutes = useMemo(() => {
         const stops = trip.data?.stops;
         if (!stops?.length) return undefined;
-        const start = stops[0][stops[0].length - 1] as number;
+        const origin = stops.find((entry) => (entry[0] as StopTuple)[EStopTuple.stopId] === firstStopId) ?? stops[0];
+        const start = origin[origin.length - 1] as number;
         const map = new Map<string, number>();
         for (const entry of stops) {
             const stop = entry[0] as StopTuple;
             const departure = entry[entry.length - 1] as number;
-            if (!map.has(stop[EStopTuple.stopId])) map.set(stop[EStopTuple.stopId], Math.round((departure - start) / 60000));
+            if (departure >= start && !map.has(stop[EStopTuple.stopId])) map.set(stop[EStopTuple.stopId], Math.round((departure - start) / 60000));
         }
         return map;
-    }, [trip.data]);
+    }, [trip.data, firstStopId]);
 
     const route = details.data?.route;
     const routeName = route?.[ERouteTuple.routeName] ?? routeId;

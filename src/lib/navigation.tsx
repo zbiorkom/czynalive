@@ -21,5 +21,5 @@ export const NAV_ENTRIES: Record<BottomNavItem, NavEntry> = {
     brigades: { key: "brigades", titleKey: "brigadeScheduleList.brigadeScheduleBottomNav", menuTitleKey: "brigadeScheduleList.brigadeSchedule", icon: <DirectionsBusIcon />, path: (c) => `/${c}/rozklad-jazdy-brygady` },
     delays: { key: "delays", titleKey: "delays.delays", menuTitleKey: "delays.delays", icon: <TimerIcon />, path: (c) => `/${c}/opoznienia-autobusy-tramwaje` },
     stats: { key: "stats", titleKey: "stats.stats", menuTitleKey: "stats.stats", icon: <BarChartIcon />, path: (c) => `/${c}/statystyki` },
-    cancelled: { key: "cancelled", titleKey: "cancelledTrips.title", menuTitleKey: "cancelledTrips.title", icon: <EventBusyIcon />, path: (c) => `/${c}/odwolane-kursy` },
+    cancelled: { key: "cancelled", titleKey: "cancelledTrips.menuTitle", menuTitleKey: "cancelledTrips.menuTitle", icon: <EventBusyIcon />, path: (c) => `/${c}/odwolane-kursy` },
 };

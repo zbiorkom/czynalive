@@ -1,3 +1,4 @@
+import type { Feature, FeatureCollection } from "geojson";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
 import { ERouteTuple, EVehiclePosition, type Point, type VehiclePosition } from "@/api/types";
 import { vehicleNumberId, vehicleRoundId, vehicleTearId } from "./canvasImages";
@@ -13,7 +14,7 @@ export type VehicleRenderOptions = Omit<MarkerOptions, "delayMs"> & { delays: Re
 
 type Animation = { from: Point; to: Point; start: number };
 
-const emptyCollection = (): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features: [] });
+const emptyCollection = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
 
 // Live vehicles: DOM markers when zoomed in, canvas symbols (circle / teardrop + line) or dots otherwise.
 export class VehicleLayer {
@@ -131,7 +132,7 @@ export class VehicleLayer {
     private render = () => {
         const zoom = this.map.getZoom();
         const detailed = zoom >= DETAILED_ZOOM;
-        const features: GeoJSON.Feature[] = [];
+        const features: Feature[] = [];
         const keep = new Set<string>();
 
         for (const vehicle of this.positions) {

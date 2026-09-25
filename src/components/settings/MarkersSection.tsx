@@ -1,5 +1,6 @@
+import Grid from "@mui/material/Grid2";
 import NavigationIcon from "@mui/icons-material/Navigation";
-import { Box, Divider, FormControlLabel, Grid, List, ListItem, ListItemIcon, ListItemText, Paper, Radio, RadioGroup, Switch, Typography } from "@mui/material";
+import { Box, Divider, FormControlLabel, List, ListItem, ListItemIcon, ListItemText, Paper, Radio, RadioGroup, Switch, Typography } from "@mui/material";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useCity } from "@/api/cities";

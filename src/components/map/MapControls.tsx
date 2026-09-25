@@ -25,7 +25,7 @@ export const MapControls = ({ map, filterActive, favouritesActive, located, loca
     const { t } = useTranslation();
     return (
         <Box className="mapgl-bottom-right" onPointerDown={stop} onWheel={stop} onDoubleClick={stop} sx={{ bottom: "calc(var(--map-pad-bottom) + 25px) !important" }}>
-            <div className="mapgl-control mapgl-bar mapgl-controls" style={{ display: "block", overflow: "hidden" }}>
+            <div className="mapgl-control mapgl-bar mapgl-controls" style={{ display: "block", overflow: "hidden", bottom: 0 }}>
                 <button
                     type="button"
                     title={t("map.filterDialogHeader")}

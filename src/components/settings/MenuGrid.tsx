@@ -1,4 +1,5 @@
-import { Box, Grid, Typography } from "@mui/material";
+import Grid from "@mui/material/Grid2";
+import { Box, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import type { MenuItem } from "./menu";
