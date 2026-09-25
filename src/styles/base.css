@@ -1,0 +1,34 @@
+html,
+body,
+#root {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+body {
+    background: var(--default-bg);
+    color: var(--default-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+a {
+    color: inherit;
+}
+.app-root {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+}
+.app-content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    position: relative;
+}
+.app-content.fullscreen {
+    overflow: hidden;
+}
+.page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 12px 12px 24px;
+}
