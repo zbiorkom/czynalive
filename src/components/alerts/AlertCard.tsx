@@ -24,31 +24,35 @@ export const AffectedFavouriteLine = () => {
     );
 };
 
-export const AlertCard = ({ city, alert, history }: { city: string; alert: CityAlert; history?: boolean }) => {
+export const AlertCard = ({ city, alert, history, fallbackPublished }: { city: string; alert: CityAlert; history?: boolean; fallbackPublished?: number }) => {
     const { t } = useTranslation();
     const favourite = useAffectsFavourite(city, alert);
-    const published = alert.publishedAt ?? alert.activeFrom;
+    const published = alert.publishedAt ?? alert.activeFrom ?? fallbackPublished ?? null;
 
     return (
-        <Card variant="outlined" className={favourite ? "border-primary" : ""} sx={{ mt: "10px", borderRadius: "8px" }}>
+        <Card variant="outlined" className={favourite ? "border-primary" : ""} style={{ marginTop: 10, borderRadius: 8 }}>
             <Link
                 to={`/${city}/komunikaty/komunikat?id=${encodeURIComponent(alert.id)}`}
                 state={{ alertId: alert.id, fromHistory: history }}
-                style={{ textDecoration: "initial", color: "var(--default-text)", display: "block" }}
+                style={{
+                    textDecoration: "initial",
+                    color: "var(--default-text)",
+                    display: "block",
+                }}
             >
                 {favourite && <AffectedFavouriteLine />}
                 <CardHeader
-                    sx={{ pt: favourite ? 0 : undefined }}
+                    style={{ paddingTop: favourite ? 0 : undefined }}
                     disableTypography
                     title={
-                        <Typography variant="h5" sx={{ wordBreak: "break-word", fontSize: "1.2rem", fontWeight: 500, mb: 0.5 }}>
+                        <Typography variant="h5" style={{ wordBreak: "break-word" }}>
                             {alert.title}
                         </Typography>
                     }
                     subheader={
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
                             {published !== null && (
-                                <Typography variant="caption" color="gray">
+                                <Typography variant="caption">
                                     {t("global.published")}: <u>{fromNow(published)}</u>
                                 </Typography>
                             )}
@@ -74,11 +78,7 @@ export const AlertCard = ({ city, alert, history }: { city: string; alert: CityA
                                     Utrudnienie wykryte automatycznie na podstawie pozycji pojazdów
                                 </Typography>
                             )}
-                            {alert.routes.length > 0 && (
-                                <Box sx={{ mt: 0.5 }}>
-                                    <RouteChips routes={alert.routes} mode="preview" />
-                                </Box>
-                            )}
+                            <RouteChips routes={alert.routes} mode="preview" />
                         </Box>
                     }
                 />

@@ -1,7 +1,7 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import { cityGet } from "@/api/client";
-import type { Point, StopTuple, VehiclePosition } from "@/api/types";
+import type { Point, RouteTuple, StopTuple, VehiclePosition } from "@/api/types";
 import { openSse } from "./sse";
 import { DETAILED_ZOOM } from "./VehicleLayer";
 
@@ -43,6 +43,23 @@ export type MapFeatures = { positions: VehiclePosition[]; dots: [string, Point][
 type Initial = { stops: StopTuple[]; suggestedCity?: string };
 type Message = { positions: VehiclePosition[]; dots: [string, Point][]; bbox?: number[] };
 
+const routeIdsCache = new Map<string, Promise<string[]>>();
+
+// Every route id of the city: `graph=1` + all routes makes the stream send full positions (never dots), like czynaczas' city-wide feed.
+const cityRouteIds = (city: string) => {
+    let ids = routeIdsCache.get(city);
+    if (!ids) {
+        ids = cityGet<RouteTuple[]>(city, "/routes")
+            .then((routes) => routes.map((route) => route[0]))
+            .catch(() => {
+                routeIdsCache.delete(city);
+                return [];
+            });
+        routeIdsCache.set(city, ids);
+    }
+    return ids;
+};
+
 // `mapFeatures/:zoom/:bounds/stream`, reopened when the viewport or the line filter changes.
 export const useMapFeatures = (city: string, viewport: Viewport | null, filterRoutes: string[], enabled = true): MapFeatures => {
     const [state, setState] = useState<MapFeatures>({ positions: [], dots: [], stops: [], error: false, loading: true });
@@ -51,18 +68,28 @@ export const useMapFeatures = (city: string, viewport: Viewport | null, filterRo
 
     useEffect(() => {
         if (!viewport || !enabled) return;
-        // From DETAILED_ZOOM on ask for >14.5 so the server sends stops and full positions (dots only above 150 vehicles).
+        // From DETAILED_ZOOM on ask for >14.5 so the server sends stops.
         const zoom = viewport.zoom >= DETAILED_ZOOM ? Math.max(viewport.zoom, 14.6) : viewport.zoom;
         setState((prev) => ({ ...prev, loading: true }));
-        const handle = openSse<Initial, Message>(`/${city}/mapFeatures/${zoom}/${viewport.bounds.join(",")}/stream`, { filterRoutes: routesKey || undefined }, {
-            onInitial: (initial) => {
-                stopsRef.current = initial.stops ?? [];
-                setState((prev) => ({ ...prev, stops: stopsRef.current, suggestedCity: initial.suggestedCity }));
-            },
-            onMessage: (message) => setState((prev) => ({ ...prev, positions: message.positions ?? [], dots: message.dots ?? [], stops: stopsRef.current, error: false, loading: false })),
-            onError: () => setState((prev) => ({ ...prev, error: true, loading: false })),
+        let handle: { close: () => void } | null = null;
+        let cancelled = false;
+        (routesKey ? Promise.resolve(routesKey.split(",")) : cityRouteIds(city)).then((routeIds) => {
+            if (cancelled) return;
+            const query = routeIds.length ? { filterRoutes: routeIds.join(","), graph: 1 } : {};
+            handle = openSse<Initial, Message>(`/${city}/mapFeatures/${zoom}/${viewport.bounds.join(",")}/stream`, query, {
+                onInitial: (initial) => {
+                    stopsRef.current = initial.stops ?? [];
+                    setState((prev) => ({ ...prev, stops: stopsRef.current, suggestedCity: initial.suggestedCity }));
+                },
+                onMessage: (message) =>
+                    setState((prev) => ({ ...prev, positions: message.positions ?? [], dots: message.dots ?? [], stops: stopsRef.current, error: false, loading: false })),
+                onError: () => setState((prev) => ({ ...prev, error: true, loading: false })),
+            });
         });
-        return () => handle.close();
+        return () => {
+            cancelled = true;
+            handle?.close();
+        };
     }, [city, viewport?.zoom, viewport?.bounds.join(","), routesKey, enabled]);
 
     return state;

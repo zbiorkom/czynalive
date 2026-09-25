@@ -1,37 +1,32 @@
 import Grid from "@mui/material/Grid2";
-import { Box, Typography } from "@mui/material";
+import { IconButton, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import type { MenuItem } from "./menu";
+import { withCity, type RouteConfig } from "@/lib/navigation";
 
-export const MenuGrid = ({ items }: { items: MenuItem[] }) => {
+export const MenuGrid = ({ items, city }: { items: RouteConfig[]; city: string }) => {
     const { t } = useTranslation();
     return (
-        <Grid container spacing={1} sx={{ p: "10px", alignItems: "stretch", justifyContent: "flex-start" }}>
+        <Grid container spacing={1} style={{ padding: 10 }} sx={{ alignItems: "stretch", justifyContent: "flex-start" }}>
             {items.map((item) => (
                 <Grid
-                    key={item.url}
-                    size={{ xs: 4, sm: 3, md: 2 }}
+                    key={item.pattern}
                     component={Link}
-                    to={item.url}
+                    to={withCity(item.pattern, city)}
+                    size={{ xs: 4, sm: 3, md: 2, lg: 1, xl: 1 }}
                     sx={{
                         display: "flex",
                         alignItems: "center",
                         flexDirection: "column",
-                        justifyContent: "flex-start",
-                        gap: 0.5,
+                        justifyContent: "space-between",
                         textAlign: "center",
                         textDecoration: "none",
+                        cursor: "pointer",
                         color: "var(--default-text)",
-                        borderRadius: 2,
-                        py: 1,
-                        "&:hover": { background: "action.hover" },
                     }}
                 >
-                    <Box sx={{ display: "flex", alignItems: "center", p: 1, color: "inherit", "& svg": { fontSize: 24 } }}>{item.icon}</Box>
-                    <Typography variant="caption" sx={{ lineHeight: 1.25 }}>
-                        {t(item.titleKey)}
-                    </Typography>
+                    <IconButton component="span">{item.settingsIcon}</IconButton>
+                    <Typography variant="caption">{t(item.menuTitleKey ?? "")}</Typography>
                 </Grid>
             ))}
         </Grid>

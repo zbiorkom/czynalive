@@ -1,127 +1,183 @@
-import FavoriteIcon from "@mui/icons-material/Favorite";
-import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
-import MapIcon from "@mui/icons-material/Map";
 import PlaceIcon from "@mui/icons-material/Place";
-import TimelineIcon from "@mui/icons-material/Timeline";
-import { Box, Divider, IconButton, Tab, Tabs, Tooltip, Typography } from "@mui/material";
-import { useEffect } from "react";
+import RouteIcon from "@mui/icons-material/Route";
+import { Box, Button, Divider, Typography } from "@mui/material";
+import Grid from "@mui/material/Grid2";
+import { useEffect, useMemo } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useCity } from "@/api/cities";
 import { cityGet } from "@/api/client";
 import { ERouteTuple, EStopTuple, type RouteTuple, type StopTupleDetailed } from "@/api/types";
 import { useApi } from "@/api/useApi";
-import { LiveDepartures } from "@/components/departures/LiveDepartures";
-import { PageHeader } from "@/components/PageHeader";
-import { ExpandableText, RouteGrid, routeLink, ShareLine, SmallAction, sortRoutes, sortTypes, stopLink, TypeCircles, typeReadableKey } from "@/components/timetable/common";
-import { StopTimetable, type StopTimetableResponse } from "@/components/timetable/StopTimetable";
+import { fetchCityAlerts } from "@/components/alerts/api";
+import { typeIcons, vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
+import { ExpandableText, routeLink, ShareLine, SmallAction, sortRoutes, sortTypes, stopLink, TypeCircles, typeReadableKey, uniqueRoutes, useThemeMode } from "@/components/timetable/common";
+import { RouteAlertBox, StopTimetable, SubwayTimetable, type StopTimetableResponse } from "@/components/timetable/StopTimetable";
 import { useRecentStops } from "@/components/timetable/recentStops";
-import { useFavourites } from "@/store/favourites";
 
 type DirectionsResponse = { stop: StopTupleDetailed; directions: [route: RouteTuple, direction: number, headsign: string, terminus: boolean][] };
 
-const Title = ({ children }: { children: React.ReactNode }) => (
-    <Typography sx={{ mt: 3 }} variant="h5" gutterBottom>
-        {children}
-    </Typography>
-);
+const Loading = () => {
+    const { t } = useTranslation();
+    return (
+        <Typography sx={{ mt: 3 }} variant="h5" gutterBottom>
+            {t("global.loading")}...
+        </Typography>
+    );
+};
+
+// Route buttons of a stop ("Wybierz linię…").
+const StopRoutes = ({ city, stopId, stopName, routes, dataCity }: { city: string; stopId: string; stopName: string; routes: RouteTuple[]; dataCity: string }) => {
+    const dark = useThemeMode() === "dark";
+    return (
+        <Box>
+            <Typography variant="body1">
+                <Trans i18nKey="timetables.chooseRouteHeader" values={{ url_stop_name: stopName }} components={[<strong key="1" />]} />
+            </Typography>
+            <Grid container spacing={1} style={{ display: "flex", padding: 10 }} sx={{ alignItems: "center" }}>
+                {routes.length === 0 ? (
+                    <Typography variant="subtitle2" style={{ margin: "10px 0" }}>
+                        <Trans i18nKey="timetables.noRouteOnStop" values={{ stopName }} components={[<strong key="1" />]} />
+                    </Typography>
+                ) : (
+                    routes.map((route) => {
+                        const type = route[ERouteTuple.routeType];
+                        const name = vehicleTypeName(type);
+                        return (
+                            <Grid key={`${route[ERouteTuple.city]}/${route[ERouteTuple.routeId]}`} size={{ xs: 4, lg: 3 }}>
+                                <Button
+                                    fullWidth
+                                    disableRipple
+                                    disableFocusRipple
+                                    disableElevation
+                                    size="small"
+                                    variant="outlined"
+                                    className={dark ? `border-${name} text-default-text bg-default-bg` : `border-tiny-${name} text-${name} bg-white`}
+                                    style={{ flexDirection: "column" }}
+                                    component={Link}
+                                    to={stopLink(city, stopId, route[ERouteTuple.routeId], dataCity)}
+                                >
+                                    <div style={{ display: "flex", alignItems: "center" }}>
+                                        {dark ? typeIcons(type).whiteIcon : typeIcons(type).icon}
+                                        {route[ERouteTuple.routeName]}
+                                    </div>
+                                </Button>
+                            </Grid>
+                        );
+                    })
+                )}
+            </Grid>
+        </Box>
+    );
+};
 
 export default function StopTimetablePage() {
     const { city = "", stopId = "", routeId } = useParams();
-    const [params, setParams] = useSearchParams();
+    const [params] = useSearchParams();
     const dataCity = params.get("miasto") || city;
-    const tab = params.get("zakladka") === "odjazdy" ? "departures" : "schedule";
     const cityInfo = useCity(city);
     const { t } = useTranslation();
-    const { has, toggle } = useFavourites(city);
     const { add: addRecent } = useRecentStops(city);
     const agencyName = cityInfo?.agencies?.default?.name ?? cityInfo?.name ?? "";
     const cityName = cityInfo?.name ?? city;
+    const timeZone = cityInfo?.timezone;
 
     const meta = useApi((signal) => cityGet<DirectionsResponse>(dataCity, `/stops/${encodeURIComponent(stopId)}/directions`, undefined, signal), [dataCity, stopId]);
     const timetable = useApi(
-        routeId ? (signal) => cityGet<StopTimetableResponse>(dataCity, `/stops/${encodeURIComponent(stopId)}/timetable/${encodeURIComponent(routeId)}`, undefined, signal) : null,
+        routeId
+            ? async (signal) => {
+                  const stop = encodeURIComponent(stopId);
+                  const route = encodeURIComponent(routeId);
+                  try {
+                      return await cityGet<StopTimetableResponse>(dataCity, `/cnc/timetable/stop/${stop}/${route}`, undefined, signal);
+                  } catch (error) {
+                      if (signal.aborted) throw error;
+                      return cityGet<StopTimetableResponse>(dataCity, `/stops/${stop}/timetable/${route}`, undefined, signal);
+                  }
+              }
+            : null,
         [dataCity, stopId, routeId],
     );
+    const alerts = useApi(routeId ? (signal) => fetchCityAlerts(dataCity, signal) : null, [dataCity, routeId]);
 
     const stop = meta.data?.stop;
-    const routes = sortRoutes((stop?.[EStopTuple.routes] as RouteTuple[] | undefined) ?? []);
-    const route = routeId ? routes.find((entry) => entry[ERouteTuple.routeId] === routeId) : undefined;
-    const stopName = stop ? `${stop[EStopTuple.stopName]}${stop[EStopTuple.stopCode] ? ` ${stop[EStopTuple.stopCode]}` : ""}` : "";
+    const routes = useMemo(() => uniqueRoutes(sortRoutes((stop?.[EStopTuple.routes] as RouteTuple[] | undefined) ?? [])), [stop]);
+    const route = routeId ? ((stop?.[EStopTuple.routes] as RouteTuple[] | undefined) ?? []).find((entry) => entry[ERouteTuple.routeId] === routeId) : undefined;
+    const stopName = stop?.[EStopTuple.stopName] ?? "";
+    const routeName = route?.[ERouteTuple.routeName] ?? routeId ?? "";
+    const headsign = meta.data?.directions.find((entry) => entry[0][ERouteTuple.routeId] === routeId)?.[2] ?? route?.[ERouteTuple.routeLongName] ?? "";
+
+    const headerText = (stop ? (routeId ? `${stopName}, ${t("global.route_id")} ${routeName}` : stopName) : null);
 
     useEffect(() => {
         if (stop) addRecent(stop as unknown as Parameters<typeof addRecent>[0]);
     }, [stop?.[EStopTuple.stopId]]);
 
     const headerTitle = `${t("timetables.timetable")} ${agencyName}`;
-    const documentTitle = stop
-        ? t("timetables.pageTitleStopRoute_id", { stopName, agencyName, rest: route ? `, ${t("global.route_id")} ${t(typeReadableKey(route[ERouteTuple.routeType]))} ${route[ERouteTuple.routeName]}` : "" })
-        : headerTitle;
+    const rest = route ? `, ${t("global.route_id")} ${t(typeReadableKey(route[ERouteTuple.routeType]))} ${routeName}` : "";
+    const documentTitle = stop ? t("timetables.pageTitleStopRoute_id", { stopName, agencyName, rest }) : headerTitle;
 
     if (meta.error) {
         return (
-            <>
-                <PageHeader title={headerTitle} back documentTitle={documentTitle} />
-                <Box className="page" sx={{ p: 2 }}>
-                    <Typography variant="body1">{meta.error.message === "STOP_NOT_FOUND" ? t("timetables.stopNotFound", { id: stopId }) : t("global.error")}</Typography>
-                </Box>
-            </>
+            <PageTemplate title={`${headerTitle} - ${t("global.stop")} ${stopId}`} padding>
+                <PageHeader documentTitle={documentTitle} subtitle={headerText} />
+                <Typography variant="body1">{t("timetables.stopNotFound", { id: stopId })}</Typography>
+            </PageTemplate>
         );
     }
 
     if (!stop) {
         return (
-            <>
-                <PageHeader title={headerTitle} back documentTitle={documentTitle} />
-                <Box className="page" sx={{ p: 2 }}>
-                    <Title>{t("global.loading")}...</Title>
-                </Box>
-            </>
+            <PageTemplate title={headerTitle} padding>
+                <PageHeader documentTitle={documentTitle} subtitle={headerText} />
+                <Loading />
+            </PageTemplate>
         );
     }
 
-    const types = stop[EStopTuple.vehicleTypes];
+    if (routeId && !route && !timetable.data && timetable.error) {
+        return (
+            <PageTemplate title={`${t("timetables.timetable")} - ${t("global.stop")} ${stopName}`} padding>
+                <PageHeader documentTitle={documentTitle} subtitle={headerText} />
+                <Box>
+                    <Typography variant="body1">{t("timetables.routeIdNotFoundWithRoute", { route_id: routeId, stop_name: stopName })}</Typography>
+                </Box>
+            </PageTemplate>
+        );
+    }
+
     const countsByType = new Map<number, number>();
     for (const entry of routes) countsByType.set(entry[ERouteTuple.routeType], (countsByType.get(entry[ERouteTuple.routeType]) ?? 0) + 1);
     const typeList = sortTypes([...countsByType.keys()]);
-    const favourite = has("stops", stop[EStopTuple.stopId]);
-    const direction = stop[EStopTuple.direction];
+    const routeType = route?.[ERouteTuple.routeType] ?? 3;
+    const alertItems = (alerts.data?.alerts ?? [])
+        .filter((alert) => alert.routes.some((entry) => entry[ERouteTuple.routeId] === routeId))
+        .map((alert) => ({ key: alert.id, title: alert.title, to: `/${city}/komunikaty/komunikat?id=${encodeURIComponent(alert.id)}` }));
+    const alertBox = <RouteAlertBox routeName={routeName} items={alertItems} />;
 
     return (
-        <>
-            <PageHeader title={headerTitle} back documentTitle={documentTitle} />
-            <Box className="page" sx={{ p: 2, pb: 10 }}>
-                <Box sx={{ display: "flex", placeItems: "center", gap: "10px", mb: "10px" }}>
-                    <TypeCircles types={types} size={40} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
+        <PageTemplate title={headerTitle} padding>
+            <PageHeader documentTitle={documentTitle} subtitle={headerText} />
+            <Box style={{ padding: "0 0 10px" }}>
+                <div style={{ display: "flex", placeItems: "center", gap: 10, marginBottom: 10 }}>
+                    <TypeCircles types={sortTypes(stop[EStopTuple.vehicleTypes].length ? stop[EStopTuple.vehicleTypes] : typeList)} />
+                    <div>
                         <Typography variant="h5">
                             <strong>
                                 {t("global.stop")} {stopName}
                             </strong>{" "}
                             - {agencyName}
                         </Typography>
-                        {direction && (
-                            <Typography variant="caption" color="textSecondary">
-                                → {direction}
-                            </Typography>
-                        )}
-                        {route && (
+                        {routeId && (
                             <Typography variant="h5">
                                 <strong>
-                                    {t(typeReadableKey(route[ERouteTuple.routeType]))} {t("global.route_id")} {route[ERouteTuple.routeName]}
+                                    {t(typeReadableKey(routeType))} {t("global.route_id")} {routeName}
                                 </strong>
                             </Typography>
                         )}
-                    </Box>
-                    <Tooltip title={favourite ? t("favourites.removeFromFavourites") : t("favourites.addToFavourites")}>
-                        <IconButton
-                            color="primary"
-                            onClick={() => toggle("stops", { id: stop[EStopTuple.stopId], name: stop[EStopTuple.stopName], code: stop[EStopTuple.stopCode] || undefined })}
-                        >
-                            {favourite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                        </IconButton>
-                    </Tooltip>
-                </Box>
+                    </div>
+                </div>
                 <Box sx={{ display: "flex", alignItems: "flex-start", flexDirection: "column" }}>
                     <ExpandableText>
                         <Typography variant="caption" gutterBottom>
@@ -138,72 +194,52 @@ export default function StopTimetablePage() {
                     </ExpandableText>
                 </Box>
                 <ShareLine text={t("timetables.shareScheduleDescription", { city: cityName, url_stop_name: stopName, agencyName })}>
-                    {route && (
+                    {routeId && (
                         <>
                             <SmallAction to={stopLink(city, stopId, undefined, dataCity)} icon={<PlaceIcon fontSize="small" />} label={t("global.stop")} />
-                            <SmallAction to={routeLink(city, route[ERouteTuple.routeId], route[ERouteTuple.city])} icon={<TimelineIcon fontSize="small" />} label={t("timetables.route")} />
+                            <SmallAction to={routeLink(city, routeId, dataCity)} icon={<RouteIcon fontSize="small" />} label={t("timetables.route")} />
                         </>
                     )}
-                    <SmallAction to={`/${city}?przystanek=${encodeURIComponent(stopId)}`} icon={<MapIcon fontSize="small" />} label={t("map.map")} />
+                    <SmallAction to={`/${city}?przystanek=${encodeURIComponent(stopId)}`} icon={<PlaceIcon fontSize="small" />} label={t("map.map")} />
                 </ShareLine>
-                <Divider sx={{ my: "10px" }} />
-                <Tabs
-                    value={tab}
-                    onChange={(_, value) => {
-                        const next = new URLSearchParams(params);
-                        if (value === "departures") next.set("zakladka", "odjazdy");
-                        else next.delete("zakladka");
-                        setParams(next, { replace: true });
-                    }}
-                    indicatorColor="primary"
-                    textColor="primary"
-                    variant="fullWidth"
-                    sx={{ mb: 1 }}
-                >
-                    <Tab value="schedule" label={t("timetables.timetable")} />
-                    <Tab value="departures" label={t("stopDetails.departures")} />
-                </Tabs>
-                {tab === "departures" ? (
-                    <Box sx={{ mt: 1 }}>
-                        <LiveDepartures city={dataCity} mapCity={city} stopId={stopId} routes={routeId ? [routeId] : undefined} />
-                    </Box>
-                ) : !routeId ? (
-                    <Box sx={{ mt: 1 }}>
-                        <Typography variant="body1">
-                            <Trans i18nKey="timetables.chooseRouteHeader" values={{ url_stop_name: stopName }} components={[<strong key="1" />]} />
-                        </Typography>
-                        <Box sx={{ p: "10px" }}>
-                            {routes.length === 0 ? (
-                                <Typography variant="subtitle2" sx={{ my: "10px" }}>
-                                    <Trans i18nKey="timetables.noRouteOnStop" values={{ stopName }} components={[<strong key="1" />]} />
-                                </Typography>
-                            ) : (
-                                <RouteGrid routes={routes} linkFor={(entry) => stopLink(city, stopId, entry[ERouteTuple.routeId], dataCity)} />
-                            )}
-                        </Box>
-                    </Box>
-                ) : !route && !timetable.data ? (
-                    timetable.error ? (
-                        <Typography variant="body1">{t("timetables.routeIdNotFoundWithRoute", { route_id: routeId, stop_name: stopName })}</Typography>
-                    ) : (
-                        <Title>{t("global.loading")}...</Title>
-                    )
+                <Divider style={{ margin: "10px 0" }} />
+                {!routeId ? (
+                    <StopRoutes city={city} stopId={stopId} stopName={stopName} routes={routes} dataCity={dataCity} />
                 ) : timetable.error ? (
-                    <Typography variant="body1">{t("global.error")}</Typography>
+                    <Box sx={{ p: 2 }}>
+                        <Typography variant="body1">{t("global.error")}</Typography>
+                    </Box>
                 ) : !timetable.data ? (
-                    <Title>{t("global.loading")}...</Title>
+                    <Box sx={{ marginBottom: "80px" }}>
+                        {alertBox}
+                        <Typography variant="body1">{t("global.loading")}...</Typography>
+                    </Box>
+                ) : routeType === 1 ? (
+                    <SubwayTimetable
+                        data={timetable.data}
+                        routeName={routeName}
+                        routeType={routeType}
+                        stopName={stopName}
+                        cityName={cityName}
+                        headsign={headsign}
+                        alerts={alertBox}
+                        timeZone={timeZone}
+                    />
                 ) : (
                     <StopTimetable
                         city={city}
                         data={timetable.data}
-                        routeName={route?.[ERouteTuple.routeName] ?? routeId}
-                        routeType={route?.[ERouteTuple.routeType] ?? 3}
+                        routeName={routeName}
+                        routeType={routeType}
                         stopName={stopName}
                         cityName={cityName}
-                        timeZone={cityInfo?.timezone}
+                        headsign={headsign}
+                        alerts={alertBox}
+                        brigadeLink={(brigade) => `/${city}/rozklad-jazdy-brygady/linia/${encodeURIComponent(routeId)}/brygada/${encodeURIComponent(brigade)}`}
+                        timeZone={timeZone}
                     />
                 )}
             </Box>
-        </>
+        </PageTemplate>
     );
 }

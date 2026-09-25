@@ -1,22 +1,30 @@
-import { createTheme, CssBaseline, ThemeProvider } from "@mui/material";
+import { createTheme, CssBaseline, StyledEngineProvider, ThemeProvider } from "@mui/material";
 import { plPL } from "@mui/material/locale";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useSettings } from "./store/settings";
+
+const FONT_WEIGHT = { regular: 400, medium: 600, bold: 700 };
 
 const shared = {
     shape: { borderRadius: 4 },
     typography: {
         fontFamily: ["-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", '"Helvetica Neue"', "Arial", "sans-serif"].join(","),
-        h1: { fontSize: "1.6rem", fontWeight: 700 },
-        h2: { fontSize: "1.35rem", fontWeight: 700 },
-        h3: { fontSize: "1.15rem", fontWeight: 500 },
-        h4: { fontSize: "1rem", fontWeight: 500 },
+        h1: { fontSize: "3rem", fontWeight: FONT_WEIGHT.bold },
+        h2: { fontSize: "2.5rem", fontWeight: FONT_WEIGHT.bold },
+        h3: { fontSize: "2rem", fontWeight: FONT_WEIGHT.medium },
+        h4: { fontSize: "1.5rem", fontWeight: FONT_WEIGHT.medium },
+        body1: { fontSize: "1rem", fontWeight: FONT_WEIGHT.regular },
+        body2: { fontSize: "0.9375rem", fontWeight: FONT_WEIGHT.regular },
+        subtitle2: { fontSize: "1rem", fontWeight: FONT_WEIGHT.medium },
+        caption: { fontSize: "0.8125rem", fontWeight: FONT_WEIGHT.regular },
     },
     components: {
         MuiModal: { defaultProps: { disableEnforceFocus: true } },
         MuiPaper: { styleOverrides: { rounded: { borderRadius: 8 } } },
         MuiDialog: { styleOverrides: { paper: { borderRadius: 8 }, paperFullScreen: { borderRadius: 0 } } },
         MuiCard: { styleOverrides: { root: { borderRadius: 8 } } },
+        // MUI 7 default used by the original (MUI 6 has 56px).
+        MuiListItemIcon: { styleOverrides: { root: { minWidth: 36 } } },
     },
 } as const;
 
@@ -63,9 +71,11 @@ export const AppThemeProvider = ({ children }: { children: ReactNode }) => {
     );
 
     return (
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            {children}
-        </ThemeProvider>
+        <StyledEngineProvider injectFirst>
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                {children}
+            </ThemeProvider>
+        </StyledEngineProvider>
     );
 };

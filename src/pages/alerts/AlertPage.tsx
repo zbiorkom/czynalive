@@ -1,4 +1,4 @@
-import { Box, Breadcrumbs, Chip, Divider, Link as MuiLink, Skeleton, Typography } from "@mui/material";
+import { Box, Breadcrumbs, Chip, Link as MuiLink, Skeleton, Typography } from "@mui/material";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -10,7 +10,7 @@ import { Markdown } from "@/components/alerts/Markdown";
 import { RouteChips } from "@/components/alerts/RouteChips";
 import { ShareButton } from "@/components/alerts/ShareButton";
 import { DataError, useCityAlerts } from "@/components/alerts/shared";
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
 
 const DateRow = ({ header, date }: { header: string; date: number }) => (
     <Typography variant="caption">
@@ -21,12 +21,12 @@ const DateRow = ({ header, date }: { header: string; date: number }) => (
     </Typography>
 );
 
-const AlertDetails = ({ city, alert }: { city: string; alert: CityAlert }) => {
+const AlertDetails = ({ city, alert, fallbackPublished }: { city: string; alert: CityAlert; fallbackPublished: number }) => {
     const { t } = useTranslation();
     const cityInfo = useCity(city);
     const favourite = useAffectsFavourite(city, alert);
     const cityName = cityInfo?.name ?? city;
-    const published = alert.publishedAt ?? alert.activeFrom;
+    const published = alert.publishedAt ?? alert.activeFrom ?? fallbackPublished;
     const expired = alert.activeUntil !== null && alert.activeUntil < Date.now();
 
     return (
@@ -51,24 +51,37 @@ const AlertDetails = ({ city, alert }: { city: string; alert: CityAlert }) => {
             <main>
                 <article>
                     <header>
-                        <Typography variant="h3" sx={{ wordBreak: "break-word", fontSize: "1.6rem", fontWeight: 500, mb: 1 }}>
+                        <Typography variant="h3" style={{ wordBreak: "break-word" }}>
                             {alert.title}
                         </Typography>
                     </header>
                     <Box sx={{ display: "flex", flexDirection: "column" }}>
                         {alert.activeFrom !== null && <DateRow header={t("alerts.validFrom")} date={alert.activeFrom} />}
                         {alert.activeUntil !== null && <DateRow header={t("alerts.validTo")} date={alert.activeUntil} />}
-                        {published !== null && <DateRow header={t("global.published")} date={published} />}
+                        <DateRow header={t("global.published")} date={published} />
                         {alert.routes.length > 0 && (
-                            <Box sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.5, my: 0.5 }}>
+                            <Box
+                                sx={{
+                                    display: "inline-flex",
+                                    alignItems: "baseline",
+                                    gap: 0.5,
+                                }}
+                            >
                                 <Typography variant="caption" sx={{ flexShrink: 0 }}>
                                     <strong>{t("alerts.affectsLines")}: </strong>
                                 </Typography>
-                                <RouteChips routes={alert.routes} mode="all" previewLength={12} linked />
+                                <RouteChips routes={alert.routes} mode="all" />
                             </Box>
                         )}
                         {alert.stops.length > 0 && (
-                            <Box sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.5, my: 0.5 }}>
+                            <Box
+                                sx={{
+                                    display: "inline-flex",
+                                    alignItems: "baseline",
+                                    gap: 0.5,
+                                    my: 0.5,
+                                }}
+                            >
                                 <Typography variant="caption" sx={{ flexShrink: 0 }}>
                                     <strong>Dotyczy przystanków: </strong>
                                 </Typography>
@@ -93,8 +106,7 @@ const AlertDetails = ({ city, alert }: { city: string; alert: CityAlert }) => {
                         </Typography>
                     </Box>
                     {favourite && <AffectedFavouriteLine />}
-                    <Divider sx={{ my: 1 }} />
-                    <Box sx={{ wordBreak: "break-word", "& p": { my: 1.5 }, "& a": { color: "var(--primary)" } }}>
+                    <Box sx={{ wordBreak: "break-word" }}>
                         {alert.detected && (
                             <Typography variant="body2" sx={{ fontStyle: "italic", my: 1.5 }}>
                                 Utrudnienie wykryte automatycznie na podstawie pozycji pojazdów — nie jest komunikatem przewoźnika.
@@ -132,14 +144,11 @@ export default function AlertPage() {
         document.querySelector(".app-content")?.scrollTo({ top: 0, behavior: "smooth" });
     }, []);
 
+    const pageTitle = `${cityInfo?.name ?? city} - ${t("alerts.pageTitleAlerts")}`;
     return (
         <>
-            <PageHeader
-                title={`${cityInfo?.name ?? city} - ${t("alerts.pageTitleAlerts")}`}
-                documentTitle={alert ? `${cityInfo?.name ?? city} - ${alert.title}` : undefined}
-                back={`/${city}/komunikaty`}
-            />
-            <div className="page">
+            <PageHeader title={pageTitle} documentTitle={alert ? `${cityInfo?.name ?? city} - ${alert.title}` : undefined} back={`/${city}/komunikaty`} />
+            <PageTemplate title={pageTitle} padding>
                 {error && !data ? (
                     <DataError error={error} />
                 ) : loading && !data ? (
@@ -151,17 +160,12 @@ export default function AlertPage() {
                             ))}
                         </div>
                     </>
-                ) : !id || !alert ? (
-                    <Box sx={{ my: 2 }}>
-                        <Typography>Nie znaleziono komunikatu — mógł już wygasnąć.</Typography>
-                        <MuiLink component={Link} to={`/${city}/komunikaty`} underline="hover">
-                            {t("alerts.alerts")}
-                        </MuiLink>
-                    </Box>
+                ) : !id || !alert || !data ? (
+                    <Typography>{t("global.error")}</Typography>
                 ) : (
-                    <AlertDetails city={city} alert={alert} />
+                    <AlertDetails city={city} alert={alert} fallbackPublished={data.updatedAt} />
                 )}
-            </div>
+            </PageTemplate>
         </>
     );
 }

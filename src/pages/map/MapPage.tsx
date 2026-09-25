@@ -25,14 +25,16 @@ import { useMapFeatures, useVehicleExtras, useViewport, useWatchedVehicles } fro
 import { LayersDialog } from "@/components/map/LayersDialog";
 import { MapControls } from "@/components/map/MapControls";
 import { attributionFor, mapStyleFor, normalizeTileLayer } from "@/components/map/mapStyle";
-import { SearchBar } from "@/components/map/SearchBar";
+import { MapLogo } from "@/components/map/MapLogo";
 import { StopLayer, STOPS_ZOOM, type TripOverlayData } from "@/components/map/StopLayer";
 import { StopSheet } from "@/components/map/StopSheet";
 import { VehicleLayer } from "@/components/map/VehicleLayer";
 import { TripSheet } from "@/components/trip/TripSheet";
 import { useTripLive, type TripLiveState } from "@/components/trip/useTripLive";
 import { VehicleSheet } from "@/components/vehicle/VehicleSheet";
-import { decodePolyline6, routeColor } from "@/lib/transit";
+import { decodePolyline6, formatTime } from "@/lib/transit";
+import { vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
+import { stopEtaPopup, stopNamePopup, stopTimePopup } from "@/components/map/popups";
 import { useFavourites } from "@/store/favourites";
 import { useSettings } from "@/store/settings";
 
@@ -48,46 +50,6 @@ const parseLines = (value: string | null) =>
         .filter(Boolean)
         .map((item) => item.match(/^\d+\/(.+)$/)?.[1] ?? item);
 
-const nearestShapeIndex = (shape: Point[], point: Point, from = 0, to = shape.length - 1) => {
-    let best = from;
-    let bestDistance = Infinity;
-    const cos = Math.cos((point[1] * Math.PI) / 180);
-    for (let i = from; i <= to; i++) {
-        const dx = (shape[i][0] - point[0]) * cos;
-        const dy = shape[i][1] - point[1];
-        const distance = dx * dx + dy * dy;
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            best = i;
-        }
-    }
-    return best;
-};
-
-// Shape index of every stop, searched forward (stops only move on along the shape, loops included).
-const stopShapeIndices = (shape: Point[], stops: Point[]) => {
-    const result: number[] = [];
-    const metres = 1 / 111320;
-    let from = 0;
-    for (const stop of stops) {
-        const cos = Math.cos((stop[1] * Math.PI) / 180);
-        let best = from;
-        let bestDistance = Infinity;
-        for (let i = from; i < shape.length; i++) {
-            const dx = (shape[i][0] - stop[0]) * cos;
-            const dy = shape[i][1] - stop[1];
-            const distance = Math.sqrt(dx * dx + dy * dy) / metres;
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = i;
-            } else if (bestDistance < 60 && distance > bestDistance + 400) break;
-        }
-        from = best;
-        result.push(best);
-    }
-    return result;
-};
-
 const tripOverlay = (live: TripLiveState): TripOverlayData | null => {
     const itinerary = live.itinerary;
     const route = live.trip?.[ETripTuple.route];
@@ -95,16 +57,7 @@ const tripOverlay = (live: TripLiveState): TripOverlayData | null => {
     const shape = decodePolyline6(itinerary[1]);
     if (shape.length < 2) return null;
     const stops = itinerary[0].map(([stop]) => ({ id: stop[EStopTuple.stopId], name: stop[EStopTuple.stopName], location: stop[EStopTuple.location] }));
-    const sequence = live.sequence ?? 0;
-    let passedIndex = 0;
-    if (sequence >= stops.length) passedIndex = shape.length - 1;
-    else if (sequence > 0) {
-        const indices = stopShapeIndices(shape, stops.map((stop) => stop.location));
-        const from = indices[sequence - 1];
-        const to = indices[sequence];
-        passedIndex = live.position ? nearestShapeIndex(shape, live.position[EVehiclePosition.location], from, Math.max(from, to)) : from;
-    }
-    return { shape, passedIndex, color: routeColor(route), stops };
+    return { shape, typeName: vehicleTypeName(route[ERouteTuple.routeType]), stops };
 };
 
 const shapeBounds = (shape: Point[]) => {
@@ -133,10 +86,20 @@ export default function MapPage() {
     const [layersOpen, setLayersOpen] = useState(false);
     const [favouritesMode, setFavouritesMode] = useState(false);
     const [vehicleFilter, setVehicleFilter] = useState<string[]>([]);
-    const [toast, setToast] = useState<{ text: string; action?: { label: string; run: () => void } } | null>(null);
-    const [sheet, setSheet] = useState<{ px: number; side: boolean }>({ px: 0, side: false });
+    const [toast, setToast] = useState<{
+        text: string;
+        action?: { label: string; run: () => void };
+    } | null>(null);
+    const [sheet, setSheet] = useState<{ px: number; side: boolean }>({
+        px: 0,
+        side: false,
+    });
     const [follow, setFollow] = useState(true);
-    const [geo, setGeo] = useState<{ position: Point | null; watching: boolean; waiting: boolean }>({ position: null, watching: false, waiting: false });
+    const [geo, setGeo] = useState<{
+        position: Point | null;
+        watching: boolean;
+        waiting: boolean;
+    }>({ position: null, watching: false, waiting: false });
     const [selectedStop, setSelectedStop] = useState<StopTupleDetailed | null>(null);
     const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
     const { favourites } = useFavourites(city);
@@ -149,10 +112,21 @@ export default function MapPage() {
     const hasBack = !!backUrl || !!(location.state as { fromSheet?: boolean } | null)?.fromSheet;
     const tileLayer = normalizeTileLayer(settings.mapStyle);
 
-    const savedFilter = settings.mapFilters[city] ?? { routes: [], vehicleTypes: [] };
+    const savedFilter = settings.mapFilters[city] ?? {
+        routes: [],
+        vehicleTypes: [],
+    };
     const filter: MapFilter = favouritesMode
-        ? { routes: favourites.routes.map((route) => route.id), vehicleTypes: [], vehicles: favourites.vehicles.map((vehicle) => vehicle.id) }
-        : { routes: savedFilter.routes, vehicleTypes: savedFilter.vehicleTypes, vehicles: vehicleFilter };
+        ? {
+              routes: favourites.routes.map((route) => route.id),
+              vehicleTypes: [],
+              vehicles: favourites.vehicles.map((vehicle) => vehicle.id),
+          }
+        : {
+              routes: savedFilter.routes,
+              vehicleTypes: savedFilter.vehicleTypes,
+              vehicles: vehicleFilter,
+          };
     const filterActive = !favouritesMode && (filter.routes.length > 0 || filter.vehicleTypes.length > 0 || filter.vehicles.length > 0);
 
     // Deep link filters: ?lines=a,b&vehicles=x,y (applied once, then dropped from the URL).
@@ -160,7 +134,13 @@ export default function MapPage() {
         const lines = parseLines(params.get("lines"));
         const vehicles = (params.get("vehicles") ?? "").split(",").filter(Boolean);
         if (!lines.length && !vehicles.length) return;
-        if (lines.length) setSettings((prev) => ({ mapFilters: { ...prev.mapFilters, [city]: { routes: lines, vehicleTypes: [] } } }));
+        if (lines.length)
+            setSettings((prev) => ({
+                mapFilters: {
+                    ...prev.mapFilters,
+                    [city]: { routes: lines, vehicleTypes: [] },
+                },
+            }));
         setVehicleFilter(vehicles);
         setFavouritesMode(false);
         const next = new URLSearchParams(params);
@@ -211,7 +191,9 @@ export default function MapPage() {
             saveTimer = setTimeout(() => {
                 const center = instance.getCenter();
                 const value: [number, number, number] = [+center.lng.toFixed(5), +center.lat.toFixed(5), Math.round(instance.getZoom() * 100) / 100];
-                setSettings((prev) => ({ lastMapLocations: { ...prev.lastMapLocations, [city]: value } }));
+                setSettings((prev) => ({
+                    lastMapLocations: { ...prev.lastMapLocations, [city]: value },
+                }));
                 const search = new URLSearchParams(window.location.search);
                 if (!search.get("przystanek") && !search.get("pojazd") && !search.get("kurs")) {
                     search.set("z", String(value[2]));
@@ -245,7 +227,10 @@ export default function MapPage() {
 
     useEffect(() => {
         if (!map) return;
-        const control = new maplibregl.AttributionControl({ compact: false, customAttribution: tileLayer === "streets" ? undefined : attributionFor(tileLayer) });
+        const control = new maplibregl.AttributionControl({
+            compact: false,
+            customAttribution: attributionFor(tileLayer),
+        });
         map.addControl(control, "bottom-left");
         return () => {
             if (map.hasControl(control)) map.removeControl(control);
@@ -257,7 +242,13 @@ export default function MapPage() {
             const next = new URLSearchParams();
             next.set(key, id);
             if (targetCity !== city) next.set("miasto", targetCity);
-            navigate({ pathname: `/${city}`, search: `?${next}` }, { state: fromSheet ? { fromSheet: true } : null, replace: !fromSheet && !!(stopId || vehicleId || tripId) });
+            navigate(
+                { pathname: `/${city}`, search: `?${next}` },
+                {
+                    state: fromSheet ? { fromSheet: true } : null,
+                    replace: !fromSheet && !!(stopId || vehicleId || tripId),
+                },
+            );
         },
         [city, navigate, stopId, vehicleId, tripId],
     );
@@ -277,7 +268,9 @@ export default function MapPage() {
     useEffect(() => {
         if (!map) return;
         const stopLayer = new StopLayer(map);
-        const vehicleLayer = new VehicleLayer(map, (vehicle) => openEntityRef.current("pojazd", vehicle[EVehiclePosition.id], vehicle[EVehiclePosition.city], false));
+        const vehicleLayer = new VehicleLayer(map, (vehicle) =>
+            openEntityRef.current("pojazd", vehicle[EVehiclePosition.id], vehicle[EVehiclePosition.city], false),
+        );
         stopLayerRef.current = stopLayer;
         vehicleLayerRef.current = vehicleLayer;
 
@@ -287,7 +280,7 @@ export default function MapPage() {
                 [event.point.x - radius, event.point.y - radius],
                 [event.point.x + radius, event.point.y + radius],
             ];
-            const layers = ["cnc-vehicles-shape", "cnc-vehicles-label", "cnc-vehicles-dots", "cnc-trip-stops", "cnc-stops"].filter((id) => map.getLayer(id));
+            const layers = ["cnc-vehicles-shape", "cnc-vehicles-label", "cnc-vehicles-dots", "cnc-stops"].filter((id) => map.getLayer(id));
             const features = map.queryRenderedFeatures(box, { layers });
             const vehicle = features.find((feature) => feature.layer.id.startsWith("cnc-vehicles") && feature.properties.tier === "small");
             if (vehicle) return openEntityRef.current("pojazd", vehicle.properties.id, vehicle.properties.city, false);
@@ -296,14 +289,17 @@ export default function MapPage() {
                 const coordinates = (dot.geometry as GeoJsonPoint).coordinates as [number, number];
                 return setToast({
                     text: t("map.zoomInToChooseVehicle"),
-                    action: { label: t("global.zoomIn"), run: () => map.flyTo({ center: coordinates, zoom: 15 }) },
+                    action: {
+                        label: t("global.zoomIn"),
+                        run: () => map.flyTo({ center: coordinates, zoom: 15 }),
+                    },
                 });
             }
-            const stop = features.find((feature) => feature.layer.id === "cnc-stops" || feature.layer.id === "cnc-trip-stops");
+            const stop = features.find((feature) => feature.layer.id === "cnc-stops");
             if (stop) openEntityRef.current("przystanek", stop.properties.id, stop.properties.city || city, false);
         };
         const onMouseMove = (event: maplibregl.MapMouseEvent) => {
-            const layers = ["cnc-vehicles-shape", "cnc-vehicles-dots", "cnc-trip-stops", "cnc-stops"].filter((id) => map.getLayer(id));
+            const layers = ["cnc-vehicles-shape", "cnc-vehicles-dots", "cnc-stops"].filter((id) => map.getLayer(id));
             const hit = map.queryRenderedFeatures(
                 [
                     [event.point.x - 8, event.point.y - 8],
@@ -350,7 +346,7 @@ export default function MapPage() {
 
     const visibleVehicles: VehiclePosition[] = useMemo(() => {
         if (vehicleId) return vehicleLive.position ? [vehicleLive.position as VehiclePosition] : [];
-        if (tripId) return tripLive.position ? [tripLive.position as VehiclePosition] : [];
+        if (tripId) return [];
         const source = filter.vehicles.length ? watched : features.positions;
         if (!filter.vehicleTypes.length) return source;
         return source.filter((vehicle) => filter.vehicleTypes.includes(vehicle[EVehiclePosition.route][ERouteTuple.routeType]));
@@ -363,6 +359,7 @@ export default function MapPage() {
         colorByDelay: settings.colorByDelay,
         dark,
         delays,
+        focused: selectionActive || filterActive,
     };
 
     useEffect(() => {
@@ -372,10 +369,44 @@ export default function MapPage() {
     useEffect(() => {
         vehicleLayerRef.current?.setOptions(markerOptions);
         stopLayerRef.current?.refresh();
-    }, [settings.markerShowBrigade, settings.markerShowVehicleNo, settings.colorByDelay, dark, delays]);
+    }, [settings.markerShowBrigade, settings.markerShowVehicleNo, settings.colorByDelay, dark, delays, selectionActive || filterActive]);
 
     // Stops and trip overlay.
-    const overlay = useMemo(() => (selectionActive ? tripOverlay(live) : null), [selectionActive, live.itinerary, live.trip, live.position, live.sequence]);
+    const overlay = useMemo(() => (selectionActive ? tripOverlay(live) : null), [selectionActive, live.itinerary, live.trip]);
+
+    // Highlighted stop of the drawer's list and its popup on the map.
+    const [activeStop, setActiveStop] = useState(0);
+    useEffect(() => setActiveStop(vehicleId ? (vehicleLive.sequence ?? 0) : 0), [vehicleId, tripId, vehicleId ? vehicleLive.sequence : 0]);
+    useEffect(() => {
+        const layer = stopLayerRef.current;
+        if (!layer) return;
+        layer.onTripStopClick = (index) => {
+            setFollow(false);
+            setActiveStop(index);
+        };
+        const stop = live.itinerary?.[0]?.[activeStop]?.[0];
+        if (!overlay || !stop || zoom < 12) return layer.setPopup(null);
+        const name = stop[EStopTuple.stopName];
+        const times = live.stops?.[activeStop];
+        const isLast = activeStop === (live.itinerary?.[0].length ?? 0) - 1;
+        const point = times ? (isLast ? times[0] : times[1]) : undefined;
+        let html = stopNamePopup(name);
+        if (tripId && point) html = stopTimePopup(name, formatTime(point[0]));
+        else if (vehicleId && point && activeStop >= (live.sequence ?? 0)) {
+            const delayed = point[0] + point[1];
+            html = stopEtaPopup(
+                name,
+                {
+                    depTime: formatTime(point[0]),
+                    delayedDepTime: formatTime(delayed),
+                    diffDelayed: point[1] / 60000,
+                    minRemaining: Math.floor((delayed - Date.now()) / 60000),
+                },
+                t,
+            );
+        }
+        layer.setPopup(stop[EStopTuple.location], html);
+    }, [map, overlay, activeStop, live.stops, live.sequence, zoom >= 12]);
 
     useEffect(() => {
         const stopLayer = stopLayerRef.current;
@@ -420,7 +451,11 @@ export default function MapPage() {
         if (lastCentered.current !== vehicleId) {
             lastCentered.current = vehicleId;
             setFollow(true);
-            map.flyTo({ center: target, zoom: Math.max(map.getZoom(), FOLLOW_ZOOM), duration: 800 });
+            map.flyTo({
+                center: target,
+                zoom: Math.max(map.getZoom(), FOLLOW_ZOOM),
+                duration: 800,
+            });
         } else if (follow) {
             map.easeTo({ center: target, duration: 900 });
         }
@@ -430,7 +465,11 @@ export default function MapPage() {
     const fitTrip = useCallback(() => {
         if (!map || !overlay) return;
         setFollow(false);
-        map.fitBounds(shapeBounds(overlay.shape), { padding: 50, maxZoom: 16, duration: 600 });
+        map.fitBounds(shapeBounds(overlay.shape), {
+            padding: 70,
+            maxZoom: 16,
+            duration: 250,
+        });
     }, [map, overlay]);
     useEffect(() => {
         if (!tripId) {
@@ -439,16 +478,18 @@ export default function MapPage() {
         }
         if (overlay && fittedTrip.current !== tripId) {
             fittedTrip.current = tripId;
-            const onThisTrip = tripLive.position && (tripLive.position as VehiclePositionDetailed)[EVehiclePosition.tripId] === tripLive.trip?.[ETripTuple.tripId];
-            if (tripLive.position && onThisTrip) map?.flyTo({ center: tripLive.position[EVehiclePosition.location], zoom: Math.max(map.getZoom(), FOLLOW_ZOOM) });
-            else fitTrip();
+            fitTrip();
         }
     }, [tripId, overlay]);
 
     const locateStop = useCallback(
         (stop: StopTupleDetailed) => {
             setSelectedStop(stop);
-            map?.flyTo({ center: stop[EStopTuple.location], zoom: Math.max(map.getZoom(), 16), duration: 700 });
+            map?.flyTo({
+                center: stop[EStopTuple.location],
+                zoom: Math.max(map.getZoom(), 16),
+                duration: 700,
+            });
         },
         [map],
     );
@@ -473,7 +514,9 @@ export default function MapPage() {
             },
             () => {
                 setGeo({ position: null, watching: false, waiting: false });
-                setToast({ text: `${t("map.locationNotFoundPart1")} ${t("map.locationNotFoundPart3")}` });
+                setToast({
+                    text: `${t("map.locationNotFoundPart1")} ${t("map.locationNotFoundPart3")}`,
+                });
             },
             { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
         );
@@ -539,39 +582,69 @@ export default function MapPage() {
 
     const applyFilter = (value: MapFilter) => {
         setFavouritesMode(false);
-        setSettings((prev) => ({ mapFilters: { ...prev.mapFilters, [city]: { routes: value.routes, vehicleTypes: value.vehicleTypes } } }));
+        setSettings((prev) => ({
+            mapFilters: {
+                ...prev.mapFilters,
+                [city]: { routes: value.routes, vehicleTypes: value.vehicleTypes },
+            },
+        }));
         setVehicleFilter(value.vehicles);
         if (value.routes.length || value.vehicles.length) setToast({ text: t("map.cautionFilteringTurnedOn") });
     };
     const resetFilter = () => {
         setFavouritesMode(false);
         setVehicleFilter([]);
-        setSettings((prev) => ({ mapFilters: { ...prev.mapFilters, [city]: { routes: [], vehicleTypes: [] } } }));
+        setSettings((prev) => ({
+            mapFilters: {
+                ...prev.mapFilters,
+                [city]: { routes: [], vehicleTypes: [] },
+            },
+        }));
     };
     const showRoute = (route: RouteTuple) => {
-        applyFilter({ routes: [route[ERouteTuple.routeId]], vehicleTypes: [], vehicles: [] });
+        applyFilter({
+            routes: [route[ERouteTuple.routeId]],
+            vehicleTypes: [],
+            vehicles: [],
+        });
         map?.easeTo({ zoom: Math.min(map.getZoom(), 12) });
     };
 
     const center = map?.getCenter();
+
+    // The drawer is fixed over the whole app; the map only needs the part it hides.
+    const sheetHeight = useCallback((visiblePx: number) => {
+        const bottom = rootRef.current?.getBoundingClientRect().bottom ?? window.innerHeight;
+        setSheet({
+            px: visiblePx ? Math.max(0, Math.round(bottom - (window.innerHeight - visiblePx))) : 0,
+            side: false,
+        });
+    }, []);
+    const focusPoint = useCallback(
+        (point: Point) => {
+            setFollow(false);
+            map?.easeTo({ center: point, zoom: 14, duration: 500 });
+        },
+        [map],
+    );
 
     return (
         <Box ref={rootRef} className="noselect mapgl-map" sx={{ position: "relative", width: "100%", height: "100%" }}>
             <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
             {map && (
                 <>
-                    {!(sheet.side && sheet.px) && (
-                        <SearchBar
-                            city={city}
-                            onVehicle={(id, targetCity) => openEntity("pojazd", id, targetCity, false)}
-                            onStop={(id, targetCity) => openEntity("przystanek", id, targetCity, false)}
-                            onTrip={(ref, targetCity) => openEntity("kurs", ref, targetCity, false)}
-                            onRoute={showRoute}
-                            onRouteTimetable={(route) => navigate(`/${route[ERouteTuple.city]}/rozklad-jazdy/linia/${encodeURIComponent(route[ERouteTuple.routeId])}`)}
-                        />
-                    )}
+                    <MapLogo bottom={selectionActive ? 0 : 1} />
                     {(filterActive || favouritesMode) && !selectionActive && (
-                        <Box sx={{ position: "absolute", top: "calc(62px + var(--sat))", left: 10, zIndex: 1000, display: "flex", gap: 1 }}>
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                top: "calc(62px + var(--sat))",
+                                left: 10,
+                                zIndex: 1000,
+                                display: "flex",
+                                gap: 1,
+                            }}
+                        >
                             <Chip
                                 color="primary"
                                 size="small"
@@ -582,25 +655,24 @@ export default function MapPage() {
                             />
                         </Box>
                     )}
-                    {!(sheet.px && !sheet.side && sheet.px > (containerRef.current?.clientHeight ?? 0) * 0.6) && (
-                        <MapControls
-                            map={map}
-                            filterActive={filterActive}
-                            favouritesActive={favouritesMode}
-                            located={!!geo.position}
-                            locating={geo.waiting}
-                            onFilter={() => setFilterOpen(true)}
-                            onLayers={() => setLayersOpen(true)}
-                            onFavourites={() => {
-                                if (!favourites.routes.length && !favourites.vehicles.length) {
-                                    setFavouritesMode(false);
-                                    return setToast({ text: t("map.noFavouritesAddThem") });
-                                }
-                                setFavouritesMode((value) => !value);
-                            }}
-                            onLocate={locate}
-                        />
-                    )}
+                    <MapControls
+                        map={map}
+                        showBar={!selectionActive && !stopId}
+                        filterActive={filterActive}
+                        favouritesActive={favouritesMode}
+                        located={!!geo.position}
+                        locating={geo.waiting}
+                        onFilter={() => setFilterOpen(true)}
+                        onLayers={() => setLayersOpen(true)}
+                        onFavourites={() => {
+                            if (!favourites.routes.length && !favourites.vehicles.length) {
+                                setFavouritesMode(false);
+                                return setToast({ text: t("map.noFavouritesAddThem") });
+                            }
+                            setFavouritesMode((value) => !value);
+                        }}
+                        onLocate={locate}
+                    />
                 </>
             )}
 
@@ -628,11 +700,19 @@ export default function MapPage() {
                     onFitTrip={fitTrip}
                     onFollow={() => {
                         setFollow(true);
-                        if (vehicleLive.position) map?.flyTo({ center: vehicleLive.position[EVehiclePosition.location], zoom: Math.max(map.getZoom(), FOLLOW_ZOOM) });
+                        if (vehicleLive.position)
+                            map?.flyTo({
+                                center: vehicleLive.position[EVehiclePosition.location],
+                                zoom: Math.max(map.getZoom(), FOLLOW_ZOOM),
+                            });
                     }}
-                    onStopClick={(id, targetCity) => openEntity("przystanek", id, targetCity, true)}
+                    activeStop={activeStop}
+                    onStopSelect={(index, point) => {
+                        setActiveStop(index);
+                        focusPoint(point);
+                    }}
                     onTripClick={(ref, targetCity) => openEntity("kurs", ref, targetCity, true)}
-                    onHeightChange={(px, side) => setSheet({ px, side })}
+                    onHeightChange={sheetHeight}
                 />
             )}
             {tripId && (
@@ -644,15 +724,31 @@ export default function MapPage() {
                     onClose={closeSheet}
                     onBack={goBack}
                     onFitTrip={fitTrip}
-                    onVehicleClick={(id, targetCity) => openEntity("pojazd", id, targetCity, true)}
-                    onStopClick={(id, targetCity) => openEntity("przystanek", id, targetCity, true)}
-                    onHeightChange={(px, side) => setSheet({ px, side })}
+                    activeStop={activeStop}
+                    onStopSelect={(index, point) => {
+                        setActiveStop(index);
+                        focusPoint(point);
+                    }}
+                    onHeightChange={sheetHeight}
                 />
             )}
 
-            <FilterDialog open={filterOpen} city={city} value={filter} onClose={() => setFilterOpen(false)} onApply={applyFilter} onToast={(text) => setToast({ text })} />
+            <FilterDialog
+                open={filterOpen}
+                city={city}
+                value={filter}
+                onClose={() => setFilterOpen(false)}
+                onApply={applyFilter}
+                onToast={(text) => setToast({ text })}
+            />
             {layersOpen && (
-                <LayersDialog open={layersOpen} onClose={() => setLayersOpen(false)} center={center ? [center.lng, center.lat] : cityInfo?.location ?? [21, 52]} zoom={zoom} dark={dark} />
+                <LayersDialog
+                    open={layersOpen}
+                    onClose={() => setLayersOpen(false)}
+                    center={center ? [center.lng, center.lat] : (cityInfo?.location ?? [21, 52])}
+                    zoom={zoom}
+                    dark={dark}
+                />
             )}
             <Snackbar
                 open={!!toast}

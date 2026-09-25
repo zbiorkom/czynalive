@@ -41,7 +41,7 @@ export const settingsStore = createPersistedStore<Settings>("czynalive:settings"
     startLocations: {},
     lastMapLocations: {},
     bottomNav: DEFAULT_BOTTOM_NAV,
-    mapStyle: "streets",
+    mapStyle: "osm",
     mapFilters: {},
     brigadeSearchType: "ROUTE_ID/BRIGADE",
 });

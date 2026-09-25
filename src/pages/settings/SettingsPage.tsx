@@ -1,18 +1,21 @@
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import InstallMobileIcon from "@mui/icons-material/InstallMobile";
-import { Box, Button, Divider, Link as MuiLink, Typography } from "@mui/material";
+import AddToHomeScreenIcon from "@mui/icons-material/AddToHomeScreen";
+import { Box, Divider, Link as MuiLink, Typography } from "@mui/material";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useCity } from "@/api/cities";
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
 import { useInstallPrompt } from "@/components/settings/install";
-import { APP_MENU, cityMenu, PREFERENCES_MENU } from "@/components/settings/menu";
 import { MenuGrid } from "@/components/settings/MenuGrid";
+import { settingsMenu } from "@/lib/navigation";
 import { useSettings } from "@/store/settings";
+
+const IS_MOBILE = typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
 
 const InstallBanner = () => {
     const { installed } = useInstallPrompt();
-    if (installed) return null;
+    if (!IS_MOBILE || installed) return null;
     return (
         <Box
             component={Link}
@@ -31,10 +34,10 @@ const InstallBanner = () => {
                 borderRadius: "8px",
             }}
         >
-            <InstallMobileIcon sx={{ color: "var(--primary)", fontSize: "1.35rem" }} />
+            <AddToHomeScreenIcon sx={{ color: "var(--primary)", fontSize: "1.35rem" }} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: "0.8rem", fontWeight: 500, lineHeight: 1.2 }}>Zainstaluj jak aplikację</Typography>
-                <Typography sx={{ fontSize: "0.7rem", color: "text.secondary", lineHeight: 1.2 }}>Ikona na pulpicie, bez sklepu</Typography>
+                <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, lineHeight: 1.2 }}>Zainstaluj jak aplikację</Typography>
+                <Typography sx={{ fontSize: "0.625rem", color: "text.secondary", lineHeight: 1.2 }}>Ikona na pulpicie, bez sklepu</Typography>
             </Box>
             <ChevronRightIcon sx={{ color: "text.secondary" }} />
         </Box>
@@ -45,52 +48,47 @@ export default function SettingsPage() {
     const { t } = useTranslation();
     const [settings] = useSettings();
     const city = useCity(settings.city ?? undefined);
+    const cityId = settings.city ?? "";
+
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
 
     return (
-        <>
-            <PageHeader title="Menu" documentTitle={t("settings.pageTitle")} />
-            <div className="page">
-                <Box sx={{ width: "95%", mx: "auto" }}>
+        <PageTemplate padding>
+            <PageHeader documentTitle={`${t("settings.pageTitle")} - Czynalive`} />
+            <div style={{ width: "95%", marginLeft: "auto", marginRight: "auto" }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <Typography variant="h4">{t("settings.pageTitle")}</Typography>
-                    <InstallBanner />
-
-                    {city ? (
-                        <>
-                            <Typography variant="h6" sx={{ mt: 1 }}>
-                                {city.name} - {t("settings.pageShortTitle")}
-                            </Typography>
-                            <Divider />
-                            <MenuGrid items={cityMenu(city.id)} />
-                        </>
-                    ) : (
-                        <Box sx={{ my: 2 }}>
-                            <Button component={Link} to="/miasto" variant="contained" fullWidth>
-                                {t("chooseCity.chooseCity")}
-                            </Button>
-                        </Box>
-                    )}
-
-                    <Typography variant="h6">{t("settings.userPreferences")}</Typography>
-                    <Divider />
-                    <MenuGrid items={PREFERENCES_MENU} />
-
-                    <Typography variant="h6">Czynalive - {t("settings.app")}</Typography>
-                    <Divider />
-                    <MenuGrid items={APP_MENU} />
-
-                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, mt: 2, mb: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
-                            Dane:{" "}
-                            <MuiLink href="https://zbiorkom.live" target="_blank" rel="noopener noreferrer">
-                                zbiorkom.live
-                            </MuiLink>
+                </Box>
+                <InstallBanner />
+                {cityId && (
+                    <>
+                        <Typography variant="h6">
+                            {city?.name ?? cityId} - {t("settings.pageShortTitle")}
                         </Typography>
-                        <MuiLink component={Link} to="/ustawienia/buswifi" variant="caption">
-                            BusWiFi
+                        <Divider />
+                        <MenuGrid items={settingsMenu("city")} city={cityId} />
+                    </>
+                )}
+                <Typography variant="h6">{t("settings.userPreferences")}</Typography>
+                <Divider />
+                <MenuGrid items={settingsMenu("preferences")} city={cityId} />
+                <Typography variant="h6">Czynalive - {t("settings.app")}</Typography>
+                <Divider />
+                <MenuGrid items={settingsMenu("app")} city={cityId} />
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", mt: 2 }}>
+                    <Typography variant="caption" sx={{ mb: 1 }}>
+                        Dane:{" "}
+                        <MuiLink href="https://zbiorkom.live" target="_blank" rel="noopener noreferrer">
+                            zbiorkom.live
                         </MuiLink>
-                    </Box>
+                    </Typography>
+                    <MuiLink component={Link} to="/ustawienia/buswifi" variant="caption">
+                        BusWiFi
+                    </MuiLink>
                 </Box>
             </div>
-        </>
+        </PageTemplate>
     );
 }

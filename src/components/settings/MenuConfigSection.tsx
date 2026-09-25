@@ -1,30 +1,35 @@
 import Grid from "@mui/material/Grid2";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
-import { Alert, Badge, BottomNavigation, BottomNavigationAction, Box, Button, Divider, Typography } from "@mui/material";
+import { Alert, AlertTitle, Badge, Box, Button, Divider, IconButton, Typography } from "@mui/material";
+import { BottomBar, BottomBarAction } from "@/components/Layout";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NAV_ENTRIES } from "@/lib/navigation";
 import { DEFAULT_BOTTOM_NAV, useSettings, type BottomNavItem } from "@/store/settings";
 import { rebrand } from "./SimpleSections";
 
+// Order of the original route table (only screens that can become a shortcut).
+const SHORTCUTS: BottomNavItem[] = ["multiBrigades", "brigades", "favourites", "timetable", "stats", "alerts", "delays", "cancelled"];
 const FIXED: BottomNavItem[] = ["map", "menu"];
 
 export const MenuConfigSection = () => {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const [settings, setSettings] = useSettings();
-    const label = (key: string) => (i18n.exists(key) ? t(key) : t("cancelledTrips.menuTitle"));
     const [config, setConfig] = useState<BottomNavItem[]>(settings.bottomNav);
     const [selected, setSelected] = useState<BottomNavItem | null>(null);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-    const available = (Object.keys(NAV_ENTRIES) as BottomNavItem[]).filter((key) => !config.includes(key) && !FIXED.includes(key));
-    const dirty = JSON.stringify(config) !== JSON.stringify(settings.bottomNav);
-    const isDefault = JSON.stringify(settings.bottomNav) === JSON.stringify(DEFAULT_BOTTOM_NAV);
+    const isCustom = JSON.stringify(settings.bottomNav) !== JSON.stringify(DEFAULT_BOTTOM_NAV);
 
     const replace = (key: BottomNavItem) => {
-        if (!selected || FIXED.includes(key)) return;
-        setConfig(config.map((item) => (item === key ? selected : item)));
+        const index = config.indexOf(key);
+        if (index === -1 || !selected) {
+            setMessage({ type: "error", text: t("global.error") });
+            return;
+        }
+        const next = [...config];
+        next[index] = selected;
+        setConfig(next);
         setSelected(null);
-        setMessage(null);
     };
 
     return (
@@ -43,45 +48,38 @@ export const MenuConfigSection = () => {
             <Typography variant="body1" gutterBottom>
                 {t("settings.menuConfigPart4")}
             </Typography>
-            <Grid container spacing={1} sx={{ p: "10px" }}>
-                {available.map((key) => {
+            <Grid container spacing={1} style={{ padding: 10 }} sx={{ alignItems: "stretch", justifyContent: "flex-start" }}>
+                {SHORTCUTS.filter((key) => !config.includes(key)).map((key) => {
                     const entry = NAV_ENTRIES[key];
-                    const active = selected === key;
                     return (
                         <Grid
                             key={key}
-                            size={{ xs: 4, sm: 3, md: 2 }}
-                            onClick={() => setSelected(active ? null : key)}
+                            onClick={() => setSelected(key)}
+                            size={{ xs: 4, sm: 3, md: 2, lg: 1, xl: 1 }}
                             sx={{
                                 display: "flex",
                                 alignItems: "center",
                                 flexDirection: "column",
+                                justifyContent: "space-between",
                                 textAlign: "center",
+                                textDecoration: "none",
                                 cursor: "pointer",
-                                color: active ? "var(--primary)" : "var(--default-text)",
-                                borderRadius: 2,
-                                py: 1,
-                                outline: active ? "2px solid var(--primary)" : "none",
+                                color: "var(--default-text)",
                             }}
                         >
-                            <Box sx={{ p: 1, display: "flex" }}>
-                                {active ? (
-                                    <Badge color="primary" badgeContent={<AutorenewIcon sx={{ fontSize: 12 }} />}>
+                            <IconButton>
+                                {selected === key ? (
+                                    <Badge variant="standard" color="primary" badgeContent={<AutorenewIcon sx={{ fontSize: "0.875rem" }} />}>
                                         {entry.icon}
                                     </Badge>
                                 ) : (
                                     entry.icon
                                 )}
-                            </Box>
-                            <Typography variant="caption">{label(entry.titleKey)}</Typography>
+                            </IconButton>
+                            <Typography variant="caption">{t(entry.titleKey)}</Typography>
                         </Grid>
                     );
                 })}
-                {!available.length && (
-                    <Typography variant="body2" color="text.secondary">
-                        {t("global.nothingFound")}
-                    </Typography>
-                )}
             </Grid>
             <Divider sx={{ my: 3 }} />
 
@@ -91,37 +89,36 @@ export const MenuConfigSection = () => {
             <Typography variant="body1" gutterBottom>
                 {t("settings.menuConfigPart6")}
             </Typography>
-            <BottomNavigation showLabels sx={{ position: "relative", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+            <BottomBar showLabels sx={{ position: "relative", boxShadow: "none", borderTop: "none" }}>
                 {config.map((key) => {
                     const entry = NAV_ENTRIES[key];
                     const replaceable = !FIXED.includes(key);
                     return (
-                        <BottomNavigationAction
+                        <BottomBarAction
                             key={key}
-                            label={label(entry.titleKey)}
-                            disabled={!replaceable || !selected}
+                            value=""
+                            label={t(entry.titleKey)}
+                            disabled={!replaceable || selected === null}
                             onClick={() => replace(key)}
-                            sx={{ minWidth: 0, px: 0.5, opacity: !replaceable ? 0.5 : 1 }}
                             icon={
                                 selected && replaceable ? (
-                                    <Badge color="secondary" badgeContent={<AutorenewIcon sx={{ fontSize: 12 }} />}>
+                                    <Badge variant="standard" color="secondary" badgeContent={<AutorenewIcon sx={{ fontSize: "0.875rem" }} />}>
                                         {entry.icon}
                                     </Badge>
                                 ) : (
-                                    entry.icon
+                                    <Box sx={{ color: "inherit", display: "inline-flex" }}>{entry.icon}</Box>
                                 )
                             }
                         />
                     );
                 })}
-            </BottomNavigation>
+            </BottomBar>
             <Divider sx={{ my: 3 }} />
 
             <Button
                 variant="contained"
                 fullWidth
                 size="small"
-                disabled={!dirty}
                 onClick={() => {
                     setSettings({ bottomNav: config });
                     setMessage({ type: "success", text: `${t("global.saved")}!` });
@@ -129,7 +126,7 @@ export const MenuConfigSection = () => {
             >
                 {t("global.save")}
             </Button>
-            {!isDefault && (
+            {isCustom && (
                 <Button
                     sx={{ mt: 3 }}
                     color="error"
@@ -148,7 +145,7 @@ export const MenuConfigSection = () => {
             )}
             {message && (
                 <Alert severity={message.type} sx={{ mt: 2 }}>
-                    {message.text}
+                    <AlertTitle>{message.text}</AlertTitle>
                 </Alert>
             )}
         </div>

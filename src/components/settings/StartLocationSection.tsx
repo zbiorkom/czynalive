@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useCity } from "@/api/cities";
+import { attributionFor, mapStyleFor, normalizeTileLayer } from "@/components/map/mapStyle";
 import { useSettings } from "@/store/settings";
 
 const DEFAULT_ZOOM = 15;
@@ -16,17 +17,24 @@ const LocationPicker = ({ center, position, onPick }: { center: [number, number]
     const pickRef = useRef(onPick);
     pickRef.current = onPick;
     const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    const [settings] = useSettings();
+    const layer = normalizeTileLayer(settings.mapStyle);
 
     useEffect(() => {
         if (!container.current) return;
         const map = new maplibregl.Map({
             container: container.current,
-            style: dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/positron",
+            style: mapStyleFor(layer, dark),
             center: position ?? center,
             zoom: DEFAULT_ZOOM,
-            attributionControl: { compact: true },
+            attributionControl: false,
+            dragRotate: false,
+            pitchWithRotate: false,
+            touchPitch: false,
         });
-        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+        map.touchZoomRotate.disableRotation();
+        map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: attributionFor(layer) }), "bottom-right");
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
         map.on("click", (event) => pickRef.current([event.lngLat.lng, event.lngLat.lat]));
         mapRef.current = map;
         return () => {
@@ -59,7 +67,11 @@ const LocationPicker = ({ center, position, onPick }: { center: [number, number]
         markerRef.current = marker;
     }, [position, dark]);
 
-    return <div ref={container} style={{ height: 300, width: "100%", border: "2px solid #29a847", boxSizing: "border-box" }} />;
+    return (
+        <div style={{ height: 300 }}>
+            <div ref={container} className="minimapgl noselect" style={{ height: "100%", width: "100%", border: "2px solid #29a847" }} />
+        </div>
+    );
 };
 
 export const StartLocationSection = () => {
@@ -99,7 +111,7 @@ export const StartLocationSection = () => {
             <Typography variant="body1" gutterBottom>
                 {t("settings.locationPart1")}
             </Typography>
-            <Divider sx={{ my: 2.5 }} />
+            <Divider style={{ margin: "20px 0" }} />
             <Typography variant="h4" gutterBottom>
                 {t("settings.locationPart2")}
             </Typography>
@@ -119,31 +131,31 @@ export const StartLocationSection = () => {
                         <strong>{t("settings.locationPart6")}:</strong>
                     </Typography>
                     <LocationPicker center={city.location} position={position} onPick={(point) => (setPosition(point), setStatus(null))} />
-                    <Button sx={{ mt: 2.5 }} color="primary" variant="contained" fullWidth disabled={!position} onClick={save}>
+                    <Button style={{ marginTop: 20 }} color="primary" variant="contained" fullWidth disabled={!position} onClick={save}>
                         {t("settings.locationPart7")}
                     </Button>
                     {saved && (
-                        <Button sx={{ mt: 2.5 }} color="error" variant="outlined" fullWidth onClick={remove}>
+                        <Button style={{ marginTop: 20 }} color="error" variant="outlined" fullWidth onClick={remove}>
                             {t("settings.locationPart8")}
                         </Button>
                     )}
                     {status === "saved" && (
-                        <Alert severity="success" sx={{ mt: 2 }}>
+                        <Alert severity="success" style={{ marginTop: 15 }}>
                             <AlertTitle sx={{ mb: 0 }}>{t("settings.locationPart9")}</AlertTitle>
                         </Alert>
                     )}
                     {status === "removed" && (
-                        <Alert severity="error" sx={{ mt: 2 }}>
+                        <Alert severity="error" style={{ marginTop: 15 }}>
                             <AlertTitle sx={{ mb: 0 }}>{t("settings.locationPart10")}</AlertTitle>
                         </Alert>
                     )}
                 </>
             )}
-            <Divider sx={{ my: 2.5 }} />
+            <Divider style={{ margin: "20px 0" }} />
             <Typography variant="h4" gutterBottom>
                 {t("settings.lastSavedLocation1")}
             </Typography>
-            <Typography variant="body1" gutterBottom sx={{ mb: 2.5, fontSize: "0.875rem" }}>
+            <Typography variant="body1" gutterBottom style={{ marginBottom: 20, fontSize: "0.875rem" }}>
                 <em>{t("settings.lastSavedLocation2")}</em>
             </Typography>
             <Typography variant="body1" gutterBottom>
@@ -151,6 +163,9 @@ export const StartLocationSection = () => {
             </Typography>
             <Typography variant="body1" gutterBottom>
                 {t("settings.lastSavedLocation4")}
+            </Typography>
+            <Typography variant="body1" gutterBottom>
+                {t("settings.lastSavedLocation5")}: <strong>{city.name}.</strong>
             </Typography>
             <FormGroup>
                 <FormControlLabel

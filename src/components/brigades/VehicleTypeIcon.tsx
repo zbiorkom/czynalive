@@ -1,42 +1,33 @@
-import DirectionsBoatIcon from "@mui/icons-material/DirectionsBoat";
-import DirectionsBusIcon from "@mui/icons-material/DirectionsBus";
-import DirectionsRailwayIcon from "@mui/icons-material/DirectionsRailway";
-import DirectionsSubwayIcon from "@mui/icons-material/DirectionsSubway";
-import TramIcon from "@mui/icons-material/Tram";
-import TrolleyIcon from "@mui/icons-material/ElectricRickshaw";
-import { Box, type SvgIconProps } from "@mui/material";
+import { Box, SvgIcon, type SvgIconProps } from "@mui/material";
+import { typeIconPath } from "@/components/map/icons";
 import { vehicleType } from "@/lib/transit";
 
-const ICONS: Record<string, (props: SvgIconProps) => JSX.Element> = {
-    bus: (props) => <DirectionsBusIcon {...props} />,
-    tram: (props) => <TramIcon {...props} />,
-    train: (props) => <DirectionsRailwayIcon {...props} />,
-    subway: (props) => <DirectionsSubwayIcon {...props} />,
-    trolleybus: (props) => <TrolleyIcon {...props} />,
-    ferry: (props) => <DirectionsBoatIcon {...props} />,
-};
-
-export const VehicleGlyph = ({ vehicle, ...props }: { vehicle: number } & Omit<SvgIconProps, "type">) => {
-    const Icon = ICONS[vehicleType(vehicle).key] ?? ICONS.bus;
-    return <Icon {...props} />;
-};
-
-// Rounded square in the vehicle type color with a white glyph (the original's type badge).
-export const VehicleTypeIcon = ({ type, size = 35 }: { type: number; size?: number }) => (
-    <Box
-        component="span"
-        sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: size,
-            height: size,
-            flex: "0 0 auto",
-            borderRadius: `${Math.round(size / 4)}px`,
-            background: vehicleType(type).cssVar,
-            color: "#fff",
-        }}
-    >
-        <VehicleGlyph vehicle={type} sx={{ fontSize: size * 0.65 }} />
-    </Box>
+// Glyph of the original /sprites.svg (bus-icon, tram-icon, …).
+export const VehicleGlyph = ({ vehicle, ...props }: { vehicle: number } & Omit<SvgIconProps, "type">) => (
+    <SvgIcon viewBox="0 0 24 24" {...props}>
+        <path d={typeIconPath(vehicle)} />
+    </SvgIcon>
 );
+
+// Original VehicleTypeChip: square in the vehicle type colour (radius 6) with a white glyph of 62.5 % of its size.
+export const VehicleTypeIcon = ({ type, size = 32 }: { type: number; size?: number }) => {
+    const glyph = Math.round(size * 0.625);
+    return (
+        <Box sx={{ display: "inline-flex", alignItems: "center", height: size, borderRadius: "6px", overflow: "hidden", flexShrink: 0 }}>
+            <Box
+                sx={{
+                    height: "100%",
+                    minWidth: size,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: vehicleType(type).cssVar,
+                    color: "var(--white)",
+                    "& svg": { width: `${glyph}px !important`, height: `${glyph}px !important` },
+                }}
+            >
+                <VehicleGlyph vehicle={type} className="fill-white" />
+            </Box>
+        </Box>
+    );
+};

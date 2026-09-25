@@ -1,10 +1,29 @@
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
-import SettingsBrightnessIcon from "@mui/icons-material/SettingsBrightness";
-import { Alert, AlertTitle, Box, Button, Divider, FormControlLabel, FormGroup, List, ListItem, ListItemText, Switch, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useCities } from "@/api/cities";
+import {
+    Alert,
+    AlertTitle,
+    Box,
+    Button,
+    Divider,
+    FormControlLabel,
+    FormGroup,
+    IconButton,
+    List,
+    ListItemButton,
+    ListItemSecondaryAction,
+    ListItemText,
+    Switch,
+    ToggleButton,
+    ToggleButtonGroup,
+    Typography,
+} from "@mui/material";
+import { Fragment, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { RouteType, StopDepartureStatus, type RouteTuple, type StopDepartureTuple } from "@/api/types";
+import { DepartureRow } from "@/components/departures/DepartureRow";
 import { useSettings } from "@/store/settings";
 
 export const APP_VERSION = "0.1.0";
@@ -27,30 +46,29 @@ export const ThemeSection = () => {
                 {t("settings.darkModeHeader")}
             </Typography>
             <Typography variant="h5" gutterBottom>
-                Wybierz, w jakim motywie chcesz korzystać z aplikacji:
+                {rebrand(t("settings.darkModeSubheader"))}:
             </Typography>
-            <Box sx={{ m: 2 }}>
+            <Box sx={{ margin: 2 }}>
                 <ToggleButtonGroup
                     color="primary"
-                    value={settings.theme}
+                    value={settings.theme === "system" ? null : settings.theme}
                     exclusive
                     fullWidth
                     onChange={(_, value) => value && setSettings({ theme: value })}
                     aria-label={t("settings.darkModeTheme")}
                 >
-                    <ToggleButton value="light" sx={{ gap: 0.75 }}>
+                    <ToggleButton value="light">
                         <LightModeIcon /> {t("settings.darkModeLight")}
                     </ToggleButton>
-                    <ToggleButton value="dark" sx={{ gap: 0.75 }}>
+                    <ToggleButton value="dark">
                         <DarkModeIcon /> {t("settings.darkModeDark")}
-                    </ToggleButton>
-                    <ToggleButton value="system" sx={{ gap: 0.75 }}>
-                        <SettingsBrightnessIcon /> Systemowy
                     </ToggleButton>
                 </ToggleButtonGroup>
             </Box>
-            <Box sx={{ my: 8 }}>
-                <AppLogo />
+            <Box sx={{ margin: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", my: 8 }}>
+                    <AppLogo size={96} />
+                </Box>
             </Box>
         </div>
     );
@@ -64,16 +82,18 @@ export const LanguageSection = () => {
             <Typography variant="h4" gutterBottom>
                 {t("changeLanguage.chooseLanguage")}:
             </Typography>
-            <Box sx={{ m: 2 }}>
-                <ToggleButtonGroup color="primary" value={settings.language} exclusive fullWidth onChange={(_, value) => value && setSettings({ language: value })}>
+            <Box sx={{ margin: 2 }}>
+                <ToggleButtonGroup
+                    color="primary"
+                    value={settings.language}
+                    exclusive
+                    fullWidth
+                    onChange={(_, value) => value && setSettings({ language: value })}
+                    aria-label={t("changeLanguage.language")}
+                >
                     <ToggleButton value="pl">{t("changeLanguage.polish")}</ToggleButton>
-                    <ToggleButton value="en" disabled>
-                        {t("changeLanguage.english")}
-                    </ToggleButton>
+                    <ToggleButton value="en">{t("changeLanguage.english")}</ToggleButton>
                 </ToggleButtonGroup>
-                <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 1 }}>
-                    Wersja angielska jest w przygotowaniu.
-                </Typography>
             </Box>
         </div>
     );
@@ -82,25 +102,57 @@ export const LanguageSection = () => {
 export const DeparturesSection = () => {
     const { t } = useTranslation();
     const [settings, setSettings] = useSettings();
+    const now = Date.now();
+    const route: RouteTuple = ["2", settings.city ?? "warsaw", "2", "", "", RouteType.Bus, ""];
+    const preview: StopDepartureTuple = [
+        ["preview", settings.city ?? "warsaw", route, "Zajezdnia Czynalive", "04", "", []],
+        ["3/4417", settings.city ?? "warsaw", route, "5", [21.0568989, 52.3019024], -75],
+        [now, 180000, StopDepartureStatus.OnTrip, "", 1],
+    ];
     return (
-        <div>
+        <div style={{ marginBottom: 70 }}>
             <Typography variant="h3" gutterBottom>
                 {t("settings.timetableSettings")}
             </Typography>
             <Typography variant="body1" gutterBottom>
                 <strong>{t("settings.timetablePart1")}</strong>
             </Typography>
-            <Divider sx={{ my: 2.5 }} />
+            <Divider style={{ margin: "20px 0" }} />
             <FormGroup>
+                <Typography variant="h4">{t("settings.showBrigade")}</Typography>
+                <Typography variant="body2">
+                    <em>
+                        <Trans i18nKey="settings.brigadeDescription" components={[<strong key="1" />]} />
+                    </em>
+                </Typography>
                 <FormControlLabel
                     control={<Switch checked={settings.departuresShowBrigade} onChange={() => setSettings({ departuresShowBrigade: !settings.departuresShowBrigade })} color="primary" />}
                     label={t("settings.timetableShowBrigadeLabel")}
                 />
+            </FormGroup>
+            <Divider style={{ margin: "20px 0" }} />
+            <FormGroup>
+                <Typography variant="h4">{t("settings.showVehicleNo")}</Typography>
+                <Typography variant="body2">
+                    <em>
+                        <Trans i18nKey="settings.vehicleNoDescription" components={[<strong key="1" />]} />
+                    </em>
+                </Typography>
                 <FormControlLabel
                     control={<Switch checked={settings.departuresShowVehicleNo} onChange={() => setSettings({ departuresShowVehicleNo: !settings.departuresShowVehicleNo })} color="primary" />}
                     label={t("settings.timetableShowVehicleNoLabel")}
                 />
             </FormGroup>
+            <Divider style={{ margin: "20px 0" }} />
+            <Typography variant="h4">{t("global.preview")}:</Typography>
+            <DepartureRow
+                city={settings.city ?? "warsaw"}
+                departure={preview}
+                now={now}
+                showBrigade={settings.departuresShowBrigade}
+                showVehicleNo={settings.departuresShowVehicleNo}
+                onSelect={() => {}}
+            />
         </div>
     );
 };
@@ -138,35 +190,37 @@ export const UpdateSection = () => {
     };
 
     return (
-        <div style={{ paddingTop: 20 }}>
-            <Typography variant="h4" gutterBottom>
+        <div style={{ width: "95%", paddingTop: "20px", textAlign: "justify" }}>
+            <Typography variant="h2" gutterBottom>
                 {t("settings.checkUpdate")}
             </Typography>
-            <Divider sx={{ my: 1.25 }} />
+            <Divider style={{ margin: "10px 0" }} />
             <Typography variant="body1" gutterBottom>
                 {t("settings.updatePart2")}
             </Typography>
             <Button variant="contained" fullWidth onClick={check} disabled={busy}>
                 {busy ? `${t("global.pleaseWait")}...` : t("settings.checkUpdate")}
             </Button>
-            <Divider sx={{ my: 1.25 }} />
+            <Divider style={{ margin: "10px 0" }} />
             <Typography variant="h5" gutterBottom>
                 <strong>{t("settings.updatePart3")}:</strong>
             </Typography>
-            <Box sx={{ my: 2 }}>
-                <AppLogo />
+            <div style={{ display: "grid", placeItems: "center" }}>
+                <AppLogo size={68} />
+            </div>
+            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                <Typography variant="h5" gutterBottom>
+                    v{APP_VERSION}
+                </Typography>
             </Box>
-            <Typography variant="h5" align="center" gutterBottom>
-                v{APP_VERSION}
-            </Typography>
             {result === "none" && (
-                <Alert severity="info" sx={{ mt: 0.5 }}>
+                <Alert severity="info" style={{ marginTop: 5 }}>
                     <AlertTitle>{t("settings.updatePart4")}</AlertTitle>
                     {rebrand(t("settings.updatePart5"))}
                 </Alert>
             )}
             {result === "updated" && (
-                <Alert severity="success" sx={{ mt: 0.5 }}>
+                <Alert severity="success" style={{ marginTop: 5 }}>
                     <AlertTitle>{t("settings.updatePart6")}</AlertTitle>
                     Pobrano nową wersję aplikacji — strona zostanie odświeżona.
                 </Alert>
@@ -175,29 +229,33 @@ export const UpdateSection = () => {
     );
 };
 
+const BUSWIFI_CITIES = [
+    { city: "kielce", name: "Kielce", vehicles: 53 },
+    { city: "gzm", name: "GOP", vehicles: 35 },
+    { city: "poznan", name: "Poznań", vehicles: 55 },
+    { city: "wroclaw", name: "Wrocław", vehicles: 89 },
+];
+
 export const BusWifiSection = () => {
     const { t } = useTranslation();
-    const { cities } = useCities();
+    const navigate = useNavigate();
     return (
-        <div>
-            <Typography variant="h4" gutterBottom>
-                {t("settings.busWifiPageTitle")}
-            </Typography>
-            <Typography variant="body2" gutterBottom>
-                {t("settings.busWifiPageDescription")}.
-            </Typography>
-            <Alert severity="info" sx={{ my: 2 }}>
-                Dane o pojazdach z urządzeniami BusWiFi nie są dostępne w źródłach zbiorkom.live. Poniżej lista miast obsługiwanych przez aplikację.
-            </Alert>
-            <List dense>
-                {cities
-                    .filter((city) => !city.virtual)
-                    .map((city) => (
-                        <ListItem key={city.id} divider>
-                            <ListItemText primary={city.name} secondary={`${t("settings.busWifiSupportedVehicles")}: ${t("global.noData").toLowerCase()}`} />
-                        </ListItem>
-                    ))}
+        <Box sx={{ display: "flex", justifyContent: "space-between", flexDirection: "column" }}>
+            <List component="nav" dense>
+                {BUSWIFI_CITIES.map(({ city, name, vehicles }) => (
+                    <Fragment key={city}>
+                        <ListItemButton onClick={() => navigate(`/${city}`)}>
+                            <ListItemText primary={name} secondary={`${t("settings.busWifiSupportedVehicles")} ${t("plural.vehicle", { count: vehicles })}`} />
+                            <ListItemSecondaryAction>
+                                <IconButton edge="end" aria-label="navigate" size="small">
+                                    <ChevronRightIcon />
+                                </IconButton>
+                            </ListItemSecondaryAction>
+                        </ListItemButton>
+                        <Divider />
+                    </Fragment>
+                ))}
             </List>
-        </div>
+        </Box>
     );
 };

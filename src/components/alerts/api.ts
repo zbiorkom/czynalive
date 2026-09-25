@@ -57,7 +57,7 @@ export const isMissingEndpoint = (error: unknown) => error instanceof ApiError &
 
 export const fromNow = (epochMs: number) => dayjs(epochMs).fromNow();
 
-export const formatDateTime = (epochMs: number) => dayjs(epochMs).format("YYYY-MM-DD HH:mm");
+export const formatDateTime = (epochMs: number, seconds = false) => dayjs(epochMs).format(seconds ? "YYYY-MM-DD HH:mm:ss" : "YYYY-MM-DD HH:mm");
 
 export const alertTimestamp = (alert: CityAlert) => alert.publishedAt ?? alert.activeFrom ?? 0;
 

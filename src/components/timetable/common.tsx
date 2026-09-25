@@ -1,14 +1,16 @@
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import IosShareIcon from "@mui/icons-material/IosShare";
 import ShareIcon from "@mui/icons-material/Share";
 import { Box, Button, IconButton, Snackbar, Typography } from "@mui/material";
+import Grid from "@mui/material/Grid2";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ERouteTuple, type RouteTuple } from "@/api/types";
-import { VehicleTypeIcon, vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
+import { ShowMoreButton, VehicleTypeChip } from "@/components/departures/parts";
+import { typeIcons, vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
 import { useSettings } from "@/store/settings";
 
+// czynaczas type order: ferry, metro, tram, trolleybus, bus, rail.
 export const ROUTE_TYPE_ORDER = [4, 1, 0, 11, 3, 2, 6, 7, 12];
 
 const collator = new Intl.Collator("pl", { numeric: true, sensitivity: "base" });
@@ -20,7 +22,6 @@ const typeRank = (type: number) => {
     return index === -1 ? ROUTE_TYPE_ORDER.length : index;
 };
 
-// czynaczas order: vehicle type (ferry, metro, tram, trolleybus, bus, rail), default agency first, then name.
 export const sortRoutes = <T extends RouteTuple>(routes: T[]): T[] =>
     [...routes].sort(
         (a, b) =>
@@ -28,6 +29,17 @@ export const sortRoutes = <T extends RouteTuple>(routes: T[]): T[] =>
             Number(b[ERouteTuple.routeAgency] === "default") - Number(a[ERouteTuple.routeAgency] === "default") ||
             compareRouteNames(a[ERouteTuple.routeName], b[ERouteTuple.routeName]),
     );
+
+// One entry per (type, displayed name), as the original keys lines by name.
+export const uniqueRoutes = <T extends RouteTuple>(routes: T[]): T[] => {
+    const seen = new Set<string>();
+    return routes.filter((route) => {
+        const key = `${route[ERouteTuple.routeType]}/${route[ERouteTuple.routeName]}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};
 
 export const sortTypes = (types: number[]) => [...new Set(types)].sort((a, b) => typeRank(a) - typeRank(b));
 
@@ -62,131 +74,160 @@ export const useThemeMode = () => {
     return settings.theme;
 };
 
-// Outlined line button in the vehicle-type colour (czynaczas route grid).
-export const RouteButton = ({ route, to, selected, onClick, sx }: { route: RouteTuple; to?: string; selected?: boolean; onClick?: () => void; sx?: object }) => {
-    const mode = useThemeMode();
-    const name = vehicleTypeName(route[ERouteTuple.routeType]);
-    const className = selected
-        ? `border-tiny-${name} bg-${name} text-white`
-        : mode === "dark"
-          ? `border-tiny-${name} text-default-text bg-default-bg`
-          : `border-tiny-${name} text-${name} bg-white`;
+export const buttonClass = (type: number, selected: boolean, dark: boolean) => {
+    const name = vehicleTypeName(type);
+    if (selected) return `border-tiny-${name} bg-${name} text-white`;
+    return dark ? `border-tiny-${name} text-default-text bg-default-bg` : `border-tiny-${name} text-${name} bg-white`;
+};
+
+// Type glyph without a circle (VehicleTypeIcon rounded=false): coloured, white in dark mode.
+export const TypeGlyph = ({ type }: { type: number }) => {
+    const dark = useThemeMode() === "dark";
+    const icons = typeIcons(type);
+    return (
+        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            {dark ? icons.whiteIcon : icons.icon}
+        </Box>
+    );
+};
+
+// Outlined line button in the vehicle-type colour (route grid of the original).
+export const RouteButton = ({ route, to, selected = false, onClick, sx }: { route: RouteTuple; to?: string; selected?: boolean; onClick?: () => void; sx?: object }) => {
+    const dark = useThemeMode() === "dark";
+    const type = route[ERouteTuple.routeType];
     const linkProps = to ? { component: Link, to } : { onClick };
     return (
-        <Button
-            fullWidth
-            variant="outlined"
-            className={className}
-            {...(linkProps as object)}
-            sx={{ flexDirection: "column", height: "100%", p: 0.5, textTransform: "none", minWidth: 0, ...sx }}
-        >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, fontWeight: 600, fontSize: "0.95rem", maxWidth: "100%" }}>
-                <VehicleTypeIcon
-                    routeType={route[ERouteTuple.routeType]}
-                    sx={{ width: "1.3em", height: "1.3em", color: selected ? "#fff" : mode === "dark" ? "var(--default-text)" : `var(--${name})` }}
-                />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{route[ERouteTuple.routeName]}</span>
+        <Button fullWidth variant="outlined" className={buttonClass(type, selected, dark)} {...(linkProps as object)} sx={[{ flexDirection: "column", height: "100%" }, { p: 0.5 }, sx ?? {}]}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                {!to && selected ? typeIcons(type).whiteIcon : <TypeGlyph type={type} />}
+                {route[ERouteTuple.routeName]}
             </Box>
         </Button>
     );
 };
 
 export const RouteGrid = ({ routes, linkFor, onSelect, selected }: { routes: RouteTuple[]; linkFor?: (route: RouteTuple) => string; onSelect?: (route: RouteTuple) => void; selected?: string }) => (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(4, 1fr)", sm: "repeat(6, 1fr)", md: "repeat(8, 1fr)", lg: "repeat(12, 1fr)" }, gap: 1 }}>
+    <Grid container spacing={1} sx={{ alignItems: "center" }}>
         {routes.map((route) => (
-            <RouteButton
-                key={`${route[ERouteTuple.city]}/${route[ERouteTuple.routeId]}`}
-                route={route}
-                to={linkFor?.(route)}
-                onClick={onSelect ? () => onSelect(route) : undefined}
-                selected={selected === route[ERouteTuple.routeId]}
-            />
+            <Grid key={`${route[ERouteTuple.routeType]}/${route[ERouteTuple.city]}/${route[ERouteTuple.routeId]}`} size={{ xs: 4, sm: 3, md: 2, lg: 1 }}>
+                <RouteButton route={route} to={linkFor?.(route)} onClick={onSelect ? () => onSelect(route) : undefined} selected={selected === route[ERouteTuple.routeId]} />
+            </Grid>
         ))}
-    </Box>
+    </Grid>
 );
 
-// Round vehicle-type badges (stop / route header).
-export const TypeCircles = ({ types, size = 40 }: { types: number[]; size?: number }) => (
-    <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
-        {sortTypes(types.length ? types : [3]).map((type) => (
-            <Box
-                key={type}
-                sx={{
-                    width: size,
-                    height: size,
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: `var(--${vehicleTypeName(type)})`,
-                    color: "#fff",
-                    p: 0.25,
-                }}
-            >
-                <VehicleTypeIcon routeType={type} sx={{ color: "#fff", width: "70%", height: "70%" }} />
-            </Box>
-        ))}
-    </Box>
-);
+// Type filter buttons (one per vehicle type, glyph only).
+export const TypeFilter = ({ types, selected, onToggle }: { types: number[]; selected: number | null; onToggle: (type: number) => void }) => {
+    const dark = useThemeMode() === "dark";
+    return (
+        <Grid container spacing={1} sx={{ pt: 1 }}>
+            {types.map((type) => (
+                <Grid key={type} size="grow">
+                    <Button fullWidth variant="outlined" onClick={() => onToggle(type)} className={buttonClass(type, selected === type, dark)} sx={[{ flexDirection: "column", height: "100%" }, { p: 0.5 }]}>
+                        <Box sx={{ display: "flex", alignItems: "center" }}>{selected === type ? typeIcons(type).whiteIcon : <TypeGlyph type={type} />}</Box>
+                    </Button>
+                </Grid>
+            ))}
+        </Grid>
+    );
+};
 
-// One-line clamped caption with an expand toggle.
+// Vehicle type block(s) of a stop / line header.
+export const TypeCircles = ({ types, size = 32 }: { types: number[]; size?: number }) => <VehicleTypeChip types={sortTypes(types.length ? types : [3])} size={size} />;
+
+const CLAMP = { overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 1, whiteSpace: "pre-wrap", lineHeight: "34px" } as const;
+
+// One-line clamped caption with the faded drop-arrow toggle.
 export const ExpandableText = ({ children }: { children: ReactNode }) => {
     const [expanded, setExpanded] = useState(false);
     return (
-        <Box sx={{ display: "flex", alignItems: "flex-start" }}>
-            <Box
-                sx={
-                    expanded
-                        ? { display: "flex", flexDirection: "column" }
-                        : { overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 1, whiteSpace: "pre-wrap", lineHeight: "34px", flexDirection: "column" }
-                }
-            >
+        <Box sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}>
+            <Box style={expanded ? { display: "flex" } : CLAMP} sx={{ flexDirection: "column" }}>
                 {children}
             </Box>
-            <IconButton size="small" onClick={() => setExpanded((value) => !value)} aria-label={expanded ? "Zwiń" : "Rozwiń"}>
-                {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </IconButton>
+            <ShowMoreButton expanded={expanded} onClick={() => setExpanded((value) => !value)} />
         </Box>
     );
 };
 
-export const ShareLine = ({ text, children }: { text: string; children?: ReactNode }) => {
-    const { t } = useTranslation();
+const isApple = typeof navigator !== "undefined" && /iPhone|iPad|Macintosh/.test(navigator.userAgent) && "ontouchend" in document;
+
+export const ShareIconAuto = (props: { fontSize?: "small" | "inherit" }) => (isApple ? <IosShareIcon {...props} /> : <ShareIcon {...props} />);
+
+export const useShare = () => {
     const [message, setMessage] = useState<string>();
-    const share = async () => {
+    const share = async (text: string) => {
         const url = window.location.href;
-        try {
-            if (navigator.share) {
-                await navigator.share({ title: text, text, url });
-                return;
-            }
-        } catch {
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: "czynalive", text, url });
+            } catch {}
             return;
         }
         try {
-            await navigator.clipboard.writeText(`${text} ${url}`);
-            setMessage(t("settings.urlCopied"));
+            await navigator.clipboard.writeText(url);
+            setMessage("Skopiowano URL!");
         } catch {
-            setMessage(t("settings.urlCopyError"));
+            setMessage("BŁĄD. Skopiuj link ręcznie.");
         }
     };
+    const snackbar = <Snackbar open={!!message} autoHideDuration={2000} onClose={() => setMessage(undefined)} message={message} />;
+    return { share, snackbar };
+};
+
+// "Udostępnij link:" + share icon button.
+export const ShareUrl = ({ text }: { text: string }) => {
+    const { t } = useTranslation();
+    const { share, snackbar } = useShare();
     return (
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", flexWrap: "wrap" }}>
-            <Typography variant="caption" data-nosnippet>
-                <strong>{t("global.shareUrl")}: </strong>
-                <IconButton size="small" color="primary" onClick={share} aria-label={t("global.share")}>
-                    <ShareIcon fontSize="small" />
-                </IconButton>
-            </Typography>
-            {children && <Box sx={{ display: "flex", alignItems: "center" }}>{children}</Box>}
-            <Snackbar open={!!message} autoHideDuration={2500} onClose={() => setMessage(undefined)} message={message} />
+        <Typography variant="caption" data-nosnippet>
+            <strong>{t("global.shareUrl")}: </strong>
+            <IconButton size="small" color="primary" onClick={() => share(text)} aria-label={t("global.share")}>
+                <ShareIconAuto fontSize="small" />
+            </IconButton>
+            {snackbar}
+        </Typography>
+    );
+};
+
+export const ShareLine = ({ text, children }: { text: string; children?: ReactNode }) => {
+    if (!children) return <ShareUrl text={text} />;
+    return (
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            <div>
+                <ShareUrl text={text} />
+            </div>
+            <div>{children}</div>
         </Box>
     );
 };
 
 export const SmallAction = ({ to, icon, label }: { to: string; icon: ReactNode; label: string }) => (
-    <IconButton size="small" color="primary" component={Link} to={to} sx={{ borderRadius: 1, gap: 0.25 }}>
+    <IconButton size="small" color="primary" component={Link} to={to}>
         {icon}
         <Typography variant="caption">{label}</Typography>
     </IconButton>
 );
+
+const readParam = (key: string) => new URLSearchParams(globalThis.location.search).get(key);
+
+const writeParam = (key: string, value: string | null) => {
+    const url = new URL(globalThis.location.href);
+    if (value === null) url.searchParams.delete(key);
+    else url.searchParams.set(key, value);
+    url.search = url.searchParams.toString();
+    globalThis.history.replaceState(globalThis.history.state, "", url);
+};
+
+// Tab state mirrored in a query param through history.replaceState (outside the router, as in the original).
+export const useUrlTab = <T extends string>(key: string, tabs: readonly T[], fallback: T): [T, (value: T) => void] => {
+    const [value, setValue] = useState<T>(() => {
+        const stored = readParam(key) as T | null;
+        return stored !== null && tabs.includes(stored) ? stored : fallback;
+    });
+    const update = (next: T) => {
+        setValue(next);
+        writeParam(key, next === fallback ? null : next);
+    };
+    return [value, update];
+};

@@ -1,9 +1,9 @@
-import { Alert, Box, Button, CircularProgress } from "@mui/material";
+import { Alert, Button } from "@mui/material";
 
 export const Loading = () => (
-    <Box sx={{ display: "grid", placeItems: "center", minHeight: "40dvh" }}>
-        <CircularProgress />
-    </Box>
+    <div style={{ display: "grid", placeItems: "center", minHeight: "50dvh" }}>
+        <div className="spinner" />
+    </div>
 );
 
 export const ErrorBox = ({ error, onRetry }: { error: Error; onRetry?: () => void }) => (

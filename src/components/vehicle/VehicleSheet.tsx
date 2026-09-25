@@ -1,22 +1,23 @@
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CloseIcon from "@mui/icons-material/Close";
-import FavoriteIcon from "@mui/icons-material/Favorite";
-import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import GpsFixedIcon from "@mui/icons-material/GpsFixed";
 import GpsOffIcon from "@mui/icons-material/GpsOff";
 import ShareIcon from "@mui/icons-material/Share";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
 import ZoomOutMapIcon from "@mui/icons-material/ZoomOutMap";
-import { Box, Chip, Menu, MenuItem, Skeleton, Tab, Tabs, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import { Box, Chip, IconButton, Menu, MenuItem, Skeleton, Tab, Tabs, Typography } from "@mui/material";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ERouteTuple, ETripTuple, EVehiclePosition, StopDepartureStatus, type VehiclePositionDetailed } from "@/api/types";
-import { RouteChip } from "@/components/departures/RouteChip";
-import { BottomSheet } from "@/components/map/BottomSheet";
-import { delayCssColor, delayToMinutes } from "@/components/map/markers";
+import { ERouteTuple, ETripTuple, EVehiclePosition, RouteType, StopDepartureStatus, type Point, type VehiclePositionDetailed } from "@/api/types";
+import { PopupInfo, RouteNameBadge } from "@/components/departures/parts";
+import { vehicleTypeName } from "@/components/departures/VehicleTypeIcon";
+import { DelayChip, MapSheet, SheetFab, SheetHeaderRow, SheetInfoRow } from "@/components/map/Sheet";
 import { shareLink } from "@/components/map/share";
-import { AlertList, SheetIconButton, SheetToolbar, useToast } from "@/components/map/SheetParts";
+import { AlertList, useToast } from "@/components/map/SheetParts";
 import { TripProgress } from "@/components/trip/TripProgress";
-import { TripStops } from "@/components/trip/TripStops";
+import { VehicleRouteStops } from "@/components/trip/TripStops";
 import type { TripLiveState } from "@/components/trip/useTripLive";
 import { parseVehicleId, routeColor } from "@/lib/transit";
 import { useFavourites } from "@/store/favourites";
@@ -32,21 +33,39 @@ type Props = {
     onBack: () => void;
     onFitTrip: () => void;
     onFollow: () => void;
-    onStopClick: (stopId: string, city: string) => void;
+    activeStop: number;
+    onStopSelect: (index: number, location: Point) => void;
     onTripClick: (tripRef: string, city: string) => void;
-    onHeightChange: (px: number, side: boolean) => void;
+    onHeightChange: (visiblePx: number) => void;
 };
 
-const useSecondsSince = (timestamp: number | undefined) => {
+const useElapsed = (timestamp: number | undefined) => {
     const [now, setNow] = useState(Date.now());
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
     }, []);
-    return timestamp ? Math.max(0, Math.round((now - timestamp) / 1000)) : undefined;
+    if (!timestamp) return null;
+    const seconds = Math.max(0, Math.round((now - timestamp) / 1000));
+    return { mins: Math.floor(seconds / 60), secs: seconds % 60 };
 };
 
-export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, onFitTrip, onFollow, onStopClick, onTripClick, onHeightChange }: Props) => {
+// Label / value row with a copy button inside the "nr" popup.
+export const CopyRow = ({ label, value, onCopy }: { label: string; value: string; onCopy: (value: string) => void }) => (
+    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+        <Typography variant="body2">
+            {label}: <strong>{value}</strong>
+        </Typography>
+        <IconButton size="small" onClick={() => onCopy(value)} aria-label={label}>
+            <ContentCopyIcon fontSize="small" />
+        </IconButton>
+    </Box>
+);
+
+const BRIGADE_TYPES: number[] = [RouteType.Tram, RouteType.Bus, RouteType.Trolleybus];
+
+// `?pojazd=` drawer: live vehicle with its trip, fleet data and duty.
+export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, onFitTrip, onFollow, activeStop, onStopSelect, onTripClick, onHeightChange }: Props) => {
     const { t } = useTranslation();
     const toast = useToast();
     const [tab, setTab] = useState<"route" | "vehicle" | "brigade">("route");
@@ -54,22 +73,31 @@ export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, 
     const { has, toggle } = useFavourites(city);
     const position = live.position;
     const route = position?.[EVehiclePosition.route] ?? live.trip?.[ETripTuple.route];
-    const { number, type } = parseVehicleId(vehicleId);
+    const { number, type: idType } = parseVehicleId(vehicleId);
+    const type = route?.[ERouteTuple.routeType] ?? idType;
     const brigade = position?.[EVehiclePosition.brigade] || live.trip?.[ETripTuple.brigade] || "";
     const timestamp = position && position.length > 6 ? (position as VehiclePositionDetailed)[EVehiclePosition.timestamp] : undefined;
-    const seconds = useSecondsSince(timestamp);
-    const color = route ? routeColor(route) : "var(--bus)";
+    const elapsed = useElapsed(timestamp);
     const stops = live.itinerary?.[0] ?? [];
     const sequence = live.sequence ?? 0;
     const current = live.stops?.[Math.min(sequence, (live.stops?.length ?? 1) - 1)];
     const currentPoint = current?.[sequence >= stops.length - 1 ? 0 : 1];
-    const hasDelay = currentPoint && (currentPoint[2] === StopDepartureStatus.OnTrip || currentPoint[2] === StopDepartureStatus.OnPreviousTrip);
-    const delayMinutes = hasDelay ? delayToMinutes(currentPoint[1]) : undefined;
+    const hasDelay = !!currentPoint && (currentPoint[2] === StopDepartureStatus.OnTrip || currentPoint[2] === StopDepartureStatus.OnPreviousTrip);
+    const firstPoint = live.stops?.[0]?.[1];
+    const firstStopMinRemaining = firstPoint ? Math.floor((firstPoint[0] + firstPoint[1] - Date.now()) / 60000) : undefined;
     const routeId = route?.[ERouteTuple.routeId];
     const favouriteVehicle = has("vehicles", vehicleId);
     const favouriteRoute = routeId ? has("routes", routeId) : false;
+    const typeColor = `var(--${vehicleTypeName(type)})`;
 
     useEffect(() => setTab("route"), [vehicleId]);
+
+    const copy = async (value: string) => {
+        try {
+            await navigator.clipboard.writeText(value);
+            toast.show(`${t("global.copied")} "${value}"`);
+        } catch {}
+    };
 
     const share = async () => {
         const url = `${window.location.origin}/${city}?pojazd=${encodeURIComponent(vehicleId)}`;
@@ -77,37 +105,52 @@ export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, 
         if (result === "copied") toast.show(t("global.copied"));
     };
 
+    let lastData: ReactNode = null;
+    if (elapsed) {
+        const late = elapsed.mins > 1;
+        const text = elapsed.mins > 0 ? `${elapsed.mins}min ${elapsed.secs}s` : `${elapsed.secs}s ${t("stopDetails.ago")}`;
+        const icon = live.fatal ? (
+            <GpsOffIcon className={late ? "text-white" : ""} fontSize="small" />
+        ) : (
+            <GpsFixedIcon className={late ? "text-white" : ""} fontSize="small" />
+        );
+        lastData = (
+            <PopupInfo
+                element={
+                    late ? (
+                        <Chip className="bg-error" size="small" label={<span className="text-white">{text}</span>} icon={icon} />
+                    ) : (
+                        <Typography variant="body2" sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                            {icon} {text}
+                        </Typography>
+                    )
+                }
+                popupContent={t("vehicleDetails.timeFromLastData")}
+            />
+        );
+    }
+
     const header = (
-        <Box>
-            {stops.length > 1 && <TripProgress color={color} fraction={Math.min(1, sequence / (stops.length - 1))} />}
-            <SheetToolbar
+        <>
+            <TripProgress color={typeColor} fraction={stops.length > 1 ? Math.min(1, sequence / (stops.length - 1)) : 0} />
+            <SheetHeaderRow
                 left={
                     <>
-                        <SheetIconButton
-                            title={t(favouriteVehicle || favouriteRoute ? "favourites.removeFromFavourites" : "favourites.addToFavourites")}
-                            active={favouriteVehicle || favouriteRoute}
+                        <SheetFab
+                            color="secondary"
+                            Icon={favouriteVehicle || favouriteRoute ? StarIcon : StarBorderIcon}
+                            className={favouriteVehicle || favouriteRoute ? "bg-warning" : ""}
+                            label={t(favouriteVehicle || favouriteRoute ? "favourites.removeFromFavourites" : "favourites.addToFavourites")}
                             onClick={(event) => setFavouriteMenu(event.currentTarget)}
-                        >
-                            {favouriteVehicle || favouriteRoute ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
-                        </SheetIconButton>
-                        <SheetIconButton title={t("global.share")} onClick={share}>
-                            <ShareIcon fontSize="small" />
-                        </SheetIconButton>
+                        />
+                        <SheetFab color="secondary" Icon={ShareIcon} label={t("global.share")} onClick={share} />
                     </>
                 }
                 right={
                     <>
-                        <SheetIconButton title={t("global.zoomOut")} onClick={onFitTrip}>
-                            <ZoomOutMapIcon fontSize="small" />
-                        </SheetIconButton>
-                        {hasBack && (
-                            <SheetIconButton title="Wstecz" onClick={onBack}>
-                                <ArrowBackIcon fontSize="small" />
-                            </SheetIconButton>
-                        )}
-                        <SheetIconButton title={t("global.close")} onClick={onClose}>
-                            <CloseIcon fontSize="small" />
-                        </SheetIconButton>
+                        <SheetFab color="secondary" Icon={ZoomOutMapIcon} label={t("global.zoomOut")} onClick={onFitTrip} />
+                        {hasBack && <SheetFab color="primary" Icon={ArrowBackIcon} onClick={onBack} />}
+                        <SheetFab color="primary" Icon={CloseIcon} onClick={onClose} />
                     </>
                 }
             />
@@ -118,7 +161,12 @@ export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, 
                 {route && (
                     <MenuItem
                         onClick={() => {
-                            toggle("routes", { id: route[ERouteTuple.routeId], name: route[ERouteTuple.routeName], type: route[ERouteTuple.routeType], color: routeColor(route) });
+                            toggle("routes", {
+                                id: route[ERouteTuple.routeId],
+                                name: route[ERouteTuple.routeName],
+                                type: route[ERouteTuple.routeType],
+                                color: routeColor(route),
+                            });
                             setFavouriteMenu(null);
                         }}
                     >
@@ -137,77 +185,92 @@ export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, 
                 </MenuItem>
             </Menu>
             <Box sx={{ mx: 2 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                <SheetInfoRow>
                     {route ? (
-                        <Box onClick={onFollow} sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, cursor: "pointer" }}>
-                            <RouteChip name={route[ERouteTuple.routeName]} type={route[ERouteTuple.routeType]} />
-                            <Typography variant="body1" noWrap sx={{ fontWeight: 500 }}>
-                                {live.trip?.[ETripTuple.headsign] ?? ""}
-                            </Typography>
-                        </Box>
+                        <RouteNameBadge
+                            routeName={route[ERouteTuple.routeName]}
+                            type={route[ERouteTuple.routeType]}
+                            isLive={false}
+                            text={live.trip?.[ETripTuple.headsign] || ""}
+                            onClick={onFollow}
+                            fontWeight="normal"
+                            angledDivider
+                            sx={{ maxWidth: "60vw", minWidth: 0, width: "fit-content" }}
+                        />
                     ) : (
-                        <Skeleton variant="text" width={160} height={32} />
+                        <span />
                     )}
-                    {seconds !== undefined && (
-                        seconds > 120 ? (
-                            <Chip size="small" className="bg-error" icon={<GpsOffIcon className="text-white" fontSize="small" />} label={<span className="text-white">{Math.floor(seconds / 60)}min {seconds % 60}s</span>} title={t("vehicleDetails.timeFromLastData")} />
-                        ) : (
-                            <Typography variant="body2" sx={{ display: "flex", gap: 0.5, alignItems: "center", flexShrink: 0 }} title={t("vehicleDetails.timeFromLastData")}>
-                                <AccessTimeIcon fontSize="small" />
-                                {seconds >= 60 ? `${Math.floor(seconds / 60)}min ${seconds % 60}s` : `${seconds}s ${t("stopDetails.ago")}`}
-                            </Typography>
-                        )
+                    {lastData}
+                </SheetInfoRow>
+                <SheetInfoRow>
+                    {!position || live.fatal ? (
+                        <div />
+                    ) : hasDelay ? (
+                        <DelayChip delayInSeconds={Math.round(currentPoint![1] / 1000)} stopSequence={sequence} firstStopMinRemaining={firstStopMinRemaining} />
+                    ) : (
+                        <div />
                     )}
-                </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 0.5, mb: 0.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: delayCssColor(delayMinutes) }}>
-                        {delayMinutes === undefined
-                            ? ""
-                            : delayMinutes > 0
-                              ? `${t("global.delayed")} +${delayMinutes} min`
-                              : delayMinutes < 0
-                                ? `${t("global.beforeTime")} ${delayMinutes} min`
-                                : t("global.onTime")}
-                    </Typography>
-                    <Typography variant="body2">
-                        {t("global.numberShort").toLowerCase()} {number || "-"}
-                        {brigade ? `/${brigade}` : ""}
-                    </Typography>
-                </Box>
+                    {(number || brigade) && (
+                        <PopupInfo
+                            element={
+                                <Typography variant="body2" sx={{ cursor: "pointer" }}>
+                                    {t("global.numberShort").toLowerCase()} {number || "-"}
+                                    {brigade ? `/${brigade}` : ""}
+                                </Typography>
+                            }
+                            popupContent={
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                                    <CopyRow label={t("global.vehicleNo")} value={number || "-"} onCopy={copy} />
+                                    {brigade && <CopyRow label={t("global.brigade")} value={brigade} onCopy={copy} />}
+                                </Box>
+                            }
+                        />
+                    )}
+                </SheetInfoRow>
+                <SheetInfoRow>
+                    <AlertList alerts={live.alerts} />
+                </SheetInfoRow>
             </Box>
-            <AlertList alerts={live.alerts} />
-            {live.fatal && (
-                <Typography variant="body2" sx={{ mx: 2, mb: 1 }} className="text-error">
-                    {t("map.signalGpsLost")}
-                </Typography>
-            )}
-            <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ minHeight: 40, "& .MuiTab-root": { minHeight: 40 } }}>
+            <Tabs
+                value={tab}
+                onChange={(_, value) => setTab(value)}
+                indicatorColor="primary"
+                textColor="primary"
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                sx={{ mb: 1 }}
+            >
                 <Tab value="route" label={t("timetables.route")} />
-                <Tab value="vehicle" label={t("global.vehicle")} />
-                {brigade && routeId && <Tab value="brigade" label={t("brigadeSchedule.brigadeSchedule")} />}
+                {number && <Tab value="vehicle" label={t("global.vehicle")} />}
+                {BRIGADE_TYPES.includes(type) && <Tab value="brigade" label={t("brigadeSchedule.brigadeSchedule")} />}
             </Tabs>
-        </Box>
+        </>
     );
 
     return (
         <>
-            <BottomSheet open header={header} onHeightChange={onHeightChange}>
-                <Box sx={{ ml: 1, mr: 1, mt: 1 }}>
+            <MapSheet open header={header} onHeightChange={onHeightChange}>
+                <Box sx={{ ml: 2, mr: 1 }}>
                     {tab === "route" &&
-                        (live.itinerary ? (
-                            <TripStops
+                        (live.itinerary && live.stops ? (
+                            <VehicleRouteStops
                                 itinerary={live.itinerary}
                                 stopTimes={live.stops}
                                 sequence={live.sequence}
-                                color={color}
-                                onStopClick={(stopId) => onStopClick(stopId, live.city)}
+                                type={type}
+                                active={activeStop} onSelect={onStopSelect}
                             />
-                        ) : position && !live.trip ? (
-                            <Typography sx={{ m: 2 }}>{t("vehicleDetails.noRouteInfo")}</Typography>
-                        ) : live.fatal ? (
-                            <Typography sx={{ m: 2 }}>{t("vehicleDetails.noLiveGps")}</Typography>
+                        ) : (position && !live.trip) || live.fatal ? (
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                                <h4>{t("vehicleDetails.noRouteInfo")}</h4>
+                            </Box>
                         ) : (
-                            ["a", "b", "c", "d"].map((key) => <Skeleton key={key} animation="wave" variant="text" height={46} />)
+                            <div>
+                                {["first", "second", "third"].map((key) => (
+                                    <Skeleton key={key} animation="wave" variant="text" height={50} width="100%" style={{ marginBottom: 5 }} />
+                                ))}
+                            </div>
                         ))}
                     {tab === "vehicle" && <VehicleInfoTab city={live.city} vehicleId={vehicleId} brigade={brigade} />}
                     {tab === "brigade" && routeId && (
@@ -220,7 +283,7 @@ export const VehicleSheet = ({ city, vehicleId, live, hasBack, onClose, onBack, 
                         />
                     )}
                 </Box>
-            </BottomSheet>
+            </MapSheet>
             {toast.element}
         </>
     );

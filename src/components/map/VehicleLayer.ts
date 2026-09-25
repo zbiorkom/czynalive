@@ -10,9 +10,11 @@ export const SMALL_ZOOM = 10;
 const ANIMATION_MS = 1000;
 const SOURCE = "cnc-vehicles";
 
-export type VehicleRenderOptions = Omit<MarkerOptions, "delayMs"> & { delays: Record<string, number | null> };
+export type VehicleRenderOptions = Omit<MarkerOptions, "delayMs"> & { delays: Record<string, number | null>; focused?: boolean };
 
 type Animation = { from: Point; to: Point; start: number };
+
+const displayLine = (name: string) => (name.length > 4 ? name[0] : name);
 
 const emptyCollection = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
 
@@ -54,12 +56,7 @@ export class VehicleLayer {
             type: "circle",
             source: SOURCE,
             filter: ["==", ["get", "tier"], "dot"],
-            paint: {
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2.5, 13, 4.5],
-                "circle-color": ["get", "color"],
-                "circle-stroke-width": 1,
-                "circle-stroke-color": "rgba(255,255,255,0.8)",
-            },
+            paint: { "circle-radius": 4, "circle-color": ["get", "color"] },
         });
         map.addLayer({
             id: "cnc-vehicles-shape",
@@ -131,7 +128,7 @@ export class VehicleLayer {
 
     private render = () => {
         const zoom = this.map.getZoom();
-        const detailed = zoom >= DETAILED_ZOOM;
+        const detailed = zoom >= DETAILED_ZOOM || (!!this.options.focused && this.positions.length <= 50);
         const features: Feature[] = [];
         const keep = new Set<string>();
 
@@ -183,7 +180,7 @@ export class VehicleLayer {
                               tier: "small",
                               icon: bearing !== null && bearing !== undefined ? vehicleTearId(color) : vehicleRoundId(color),
                               angle: bearing ?? 0,
-                              label: vehicleNumberId(vehicle[EVehiclePosition.route][ERouteTuple.routeName].slice(0, 4)),
+                              label: vehicleNumberId(displayLine(vehicle[EVehiclePosition.route][ERouteTuple.routeName])),
                           }
                         : { id, city: vehicle[EVehiclePosition.city], tier: "dot", color: getComputedStyle(document.documentElement).getPropertyValue(color).trim() || "#666" },
                 });

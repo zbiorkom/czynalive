@@ -85,7 +85,8 @@ export const generateImage = (map: MapLibreMap, id: string) => {
                 ctx.arc(center, center, radius, 0, Math.PI * 2);
                 ctx.clip();
                 if (colors.length > 1) {
-                    const gradient = ctx.createLinearGradient(0, 0, STOP, STOP);
+                    const reach = radius * Math.SQRT2;
+                    const gradient = ctx.createLinearGradient(center + Math.SQRT1_2 * reach, center + Math.SQRT1_2 * reach, center - Math.SQRT1_2 * reach, center - Math.SQRT1_2 * reach);
                     gradient.addColorStop(0, colors[0]);
                     gradient.addColorStop(0.49, colors[0]);
                     gradient.addColorStop(0.49, "#ffffff");
@@ -136,4 +137,79 @@ export const generateImage = (map: MapLibreMap, id: string) => {
 
 export const installImageGenerator = (map: MapLibreMap) => {
     map.on("styleimagemissing", (event) => generateImage(map, event.id));
+};
+
+// Animated dash of the selected trip's line (the pattern flows along the line, 3 s per period).
+const DASH_UNIT = 12.5;
+const DASH_GAP = 0.9;
+const DASH_PERIOD_MS = 3000;
+const DASH_HEIGHT = 8;
+const DASH_WIDTH = Math.round(DASH_HEIGHT * (DASH_UNIT + DASH_GAP));
+const DASH_ON = (DASH_WIDTH * DASH_UNIT) / (DASH_UNIT + DASH_GAP);
+
+const parseColor = (value: string): [number, number, number] => {
+    const hex = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+        const full = hex[1].length === 3 ? hex[1].split("").map((c) => c + c).join("") : hex[1];
+        return [parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16)];
+    }
+    const rgb = value.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
+    if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+    const hsl = value.match(/hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/);
+    if (hsl) {
+        const hue = Number(hsl[1]);
+        const saturation = Number(hsl[2]) / 100;
+        const lightness = Number(hsl[3]) / 100;
+        const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+        const sector = (((hue % 360) + 360) % 360) / 60;
+        const second = chroma * (1 - Math.abs((sector % 2) - 1));
+        const [r, g, b] =
+            sector < 1 ? [chroma, second, 0] : sector < 2 ? [second, chroma, 0] : sector < 3 ? [0, chroma, second] : sector < 4 ? [0, second, chroma] : sector < 5 ? [second, 0, chroma] : [chroma, 0, second];
+        const m = lightness - chroma / 2;
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+    }
+    return [136, 136, 136];
+};
+
+const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+
+const paintDash = (data: Uint8Array, shift: number, [r, g, b]: [number, number, number]) => {
+    const rowBytes = DASH_WIDTH * 4;
+    for (let x = 0; x < DASH_WIDTH; x++) {
+        const cover =
+            overlap(x, x + 1, shift - DASH_WIDTH, shift - DASH_WIDTH + DASH_ON) + overlap(x, x + 1, shift, shift + DASH_ON) + overlap(x, x + 1, shift + DASH_WIDTH, shift + DASH_WIDTH + DASH_ON);
+        const offset = x * 4;
+        data[offset] = r;
+        data[offset + 1] = g;
+        data[offset + 2] = b;
+        data[offset + 3] = Math.round(Math.min(cover, 1) * 255);
+    }
+    for (let y = 1; y < DASH_HEIGHT; y++) data.copyWithin(y * rowBytes, 0, rowBytes);
+};
+
+export const tripDashId = (map: MapLibreMap, typeName: string) => {
+    const id = `trip-dash-${typeName}|${themeKey()}`;
+    if (map.hasImage(id)) return id;
+    const color = parseColor(cssVar(`--${typeName}`, "#888888"));
+    const data = new Uint8Array(DASH_WIDTH * DASH_HEIGHT * 4);
+    paintDash(data, 0, color);
+    let owner: MapLibreMap | null = null;
+    let last = -1;
+    map.addImage(id, {
+        width: DASH_WIDTH,
+        height: DASH_HEIGHT,
+        data,
+        onAdd: (added: MapLibreMap) => {
+            owner = added;
+        },
+        render: () => {
+            const shift = ((performance.now() % DASH_PERIOD_MS) / DASH_PERIOD_MS) * DASH_WIDTH;
+            owner?.triggerRepaint();
+            if (Math.abs(shift - last) < 0.01) return false;
+            last = shift;
+            paintDash(data, shift, color);
+            return true;
+        },
+    } as never);
+    return id;
 };

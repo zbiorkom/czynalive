@@ -20,12 +20,13 @@ type Props = {
 
 const MAX_LIMIT = 100;
 
-export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact, routes, showMore = true, onSelect, mapCity }: Props) => {
+export const LiveDepartures = ({ city, stopId, limit: initialLimit = 10, compact, routes, showMore = true, onSelect, mapCity }: Props) => {
     const { t } = useTranslation();
     const [settings] = useSettings();
     const [limit, setLimit] = useState(initialLimit);
     const [loadingMore, setLoadingMore] = useState(false);
     const now = useNow();
+    const [active, setActive] = useState<number | null>(null);
     const { departures, error } = useStopDepartures(city, stopId, { limit, routes });
 
     useEffect(() => setLimit(initialLimit), [city, stopId, initialLimit]);
@@ -59,7 +60,7 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact
 
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            {departures.map((departure) => (
+            {departures.map((departure, index) => (
                 <DepartureRow
                     key={`${departure[EStopDepartureTuple.trip][ETripTuple.tripId]}-${departure[EStopDepartureTuple.departure][EDeparture.scheduledDeparture]}`}
                     city={mapCity ?? city}
@@ -68,7 +69,15 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact
                     compact={compact}
                     showBrigade={settings.departuresShowBrigade}
                     showVehicleNo={settings.departuresShowVehicleNo}
-                    onSelect={onSelect}
+                    active={index === active}
+                    onSelect={
+                        onSelect
+                            ? (selected) => {
+                                  setActive(index);
+                                  onSelect(selected);
+                              }
+                            : undefined
+                    }
                 />
             ))}
             {showMore && limit < MAX_LIMIT && departures.length >= limit && (
@@ -76,7 +85,7 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 20, compact
                     variant="outlined"
                     fullWidth
                     disabled={loadingMore}
-                    sx={{ mt: 2 }}
+                    sx={{ mt: 4 }}
                     className="text-default-text"
                     onClick={() => {
                         setLoadingMore(true);

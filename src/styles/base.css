@@ -1,34 +1,13 @@
-html,
-body,
-#root {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-}
-body {
-    background: var(--default-bg);
-    color: var(--default-text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    -webkit-tap-highlight-color: transparent;
-}
-a {
-    color: inherit;
-}
-.app-root {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-}
 .app-content {
-    flex: 1 1 auto;
-    overflow-y: auto;
-    position: relative;
+    box-sizing: border-box;
+    min-height: 100dvh;
+    padding-top: calc(48px + env(safe-area-inset-top));
+    padding-bottom: var(--bottom-chrome, calc(65px + env(safe-area-inset-bottom)));
 }
 .app-content.fullscreen {
+    height: 100dvh;
     overflow: hidden;
 }
 .page {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 12px 12px 24px;
+    padding: 10px 16px;
 }

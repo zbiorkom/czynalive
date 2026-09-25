@@ -1,4 +1,5 @@
-import { Box, Divider, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Button, Divider, Typography } from "@mui/material";
+import type { GridColDef } from "@mui/x-data-grid";
 import Grid from "@mui/material/Grid2";
 import { useMemo } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -6,9 +7,9 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useCity } from "@/api/cities";
 import { useApi } from "@/api/useApi";
 import { formatDateTime, isMissingEndpoint } from "@/components/alerts/api";
-import { PageHeader } from "@/components/PageHeader";
-import { DataTable } from "@/components/stats/DataTable";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
 import { TopLinesChart } from "@/components/stats/TopLinesChart";
+import { boldHeader, IS_MOBILE_AGENT, naturalCompare, StatsDataGrid } from "@/components/stats/StatsDataGrid";
 import { VehicleGrid } from "@/components/stats/VehicleGrid";
 import {
     computeDelayStats,
@@ -42,7 +43,12 @@ const StatsTiles = ({ city, stats }: { city: string; stats: DelayStats }) => {
         );
     const toleranceNote = (
         <Typography variant="caption" gutterBottom>
-            <em>{t("delays.toleranceDescription", { max: tolerance.max, min: Math.abs(tolerance.min) })}</em>
+            <em>
+                {t("delays.toleranceDescription", {
+                    max: tolerance.max,
+                    min: Math.abs(tolerance.min),
+                })}
+            </em>
         </Typography>
     );
     const percentile = (percentile: string, delay: number) => (
@@ -57,8 +63,20 @@ const StatsTiles = ({ city, stats }: { city: string; stats: DelayStats }) => {
     const tiles = [
         <StatTile title={t("delays.averageDelay")} value={stats.avg} suffix="min" className={`bg-${delayMinutesClass(stats.avg)} text-white`} />,
         <StatTile title={t("delays.medianDelay")} value={stats.median} suffix="min" className={`bg-${delayMinutesClass(stats.median)} text-white`} />,
-        <StatTile title={t("delays.biggestDelay")} value={maxMinutes} suffix="min" className={`bg-${delayMinutesClass(maxMinutes)} text-white`} additional={vehicleLink(stats.max)} />,
-        <StatTile title={t("delays.lowestDelay")} value={minMinutes} suffix="min" className={`bg-${delayMinutesClass(minMinutes)} text-white`} additional={vehicleLink(stats.min)} />,
+        <StatTile
+            title={t("delays.biggestDelay")}
+            value={maxMinutes}
+            suffix="min"
+            className={`bg-${delayMinutesClass(maxMinutes)} text-white`}
+            additional={vehicleLink(stats.max)}
+        />,
+        <StatTile
+            title={t("delays.lowestDelay")}
+            value={minMinutes}
+            suffix="min"
+            className={`bg-${delayMinutesClass(minMinutes)} text-white`}
+            additional={vehicleLink(stats.min)}
+        />,
         <StatTile
             title={t("delays.tolerancePercentage")}
             value={stats.inTolerance.percentage}
@@ -87,9 +105,27 @@ const StatsTiles = ({ city, stats }: { city: string; stats: DelayStats }) => {
                 </>
             }
         />,
-        <StatTile title={t("delays.25percentile")} value={stats.quantile25} suffix="min" className={`bg-${delayMinutesClass(stats.quantile25)} text-white`} additional={percentile("25", stats.quantile25)} />,
-        <StatTile title={t("delays.75percentile")} value={stats.quantile75} suffix="min" className={`bg-${delayMinutesClass(stats.quantile75)} text-white`} additional={percentile("75", stats.quantile75)} />,
-        <StatTile title={t("delays.90percentile")} value={stats.quantile90} suffix="min" className={`bg-${delayMinutesClass(stats.quantile90)} text-white`} additional={percentile("90", stats.quantile90)} />,
+        <StatTile
+            title={t("delays.25percentile")}
+            value={stats.quantile25}
+            suffix="min"
+            className={`bg-${delayMinutesClass(stats.quantile25)} text-white`}
+            additional={percentile("25", stats.quantile25)}
+        />,
+        <StatTile
+            title={t("delays.75percentile")}
+            value={stats.quantile75}
+            suffix="min"
+            className={`bg-${delayMinutesClass(stats.quantile75)} text-white`}
+            additional={percentile("75", stats.quantile75)}
+        />,
+        <StatTile
+            title={t("delays.90percentile")}
+            value={stats.quantile90}
+            suffix="min"
+            className={`bg-${delayMinutesClass(stats.quantile90)} text-white`}
+            additional={percentile("90", stats.quantile90)}
+        />,
         <StatTile
             title={t("delays.top10DelayTitle")}
             value={stats.avgTop10}
@@ -107,7 +143,7 @@ const StatsTiles = ({ city, stats }: { city: string; stats: DelayStats }) => {
     return (
         <Grid container spacing={1} sx={{ my: 2 }}>
             {tiles.map((tile, index) => (
-                <Grid key={index} size={{ xs: 6, sm: 4, md: 2.4 }}>
+                <Grid key={index} size={{ xs: 6, sm: 4, md: 2 }}>
                     {tile}
                 </Grid>
             ))}
@@ -115,10 +151,77 @@ const StatsTiles = ({ city, stats }: { city: string; stats: DelayStats }) => {
     );
 };
 
-const PerRouteSection = ({ city, stats, types, selectedType, subtitle }: { city: string; stats: DelayStats; types: number[]; selectedType: number | "total"; subtitle: string }) => {
+const PerRouteSection = ({
+    city,
+    stats,
+    types,
+    selectedType,
+    subtitle,
+}: {
+    city: string;
+    stats: DelayStats;
+    types: number[];
+    selectedType: number | "total";
+    subtitle: string;
+}) => {
     const { t } = useTranslation();
-    const theme = useTheme();
-    const mobile = useMediaQuery(theme.breakpoints.down("md"));
+    const routeColumns = useMemo<GridColDef<RouteDelay>[]>(
+        () =>
+            (
+                [
+                    {
+                        field: "type",
+                        headerName: t("delays.vehicleType"),
+                        hideable: false,
+                        minWidth: 80,
+                        maxWidth: 120,
+                        flex: 1,
+                        valueGetter: (_, row) => typeName(row.type),
+                        renderCell: (params) => <span title={String(params.row.type)}>{typeName(params.row.type)}</span>,
+                    },
+                    {
+                        field: "routeName",
+                        headerName: t("global.route_id"),
+                        flex: 1,
+                        hideable: false,
+                        minWidth: 60,
+                        maxWidth: 80,
+                        sortComparator: naturalCompare,
+                    },
+                    {
+                        field: "count",
+                        headerName: t("delays.vehiclesCount"),
+                        flex: 1,
+                        hideable: false,
+                        type: "number",
+                        minWidth: 60,
+                    },
+                    {
+                        field: "avgDelay",
+                        headerName: t("delays.averageDelay"),
+                        hideable: false,
+                        flex: 1,
+                        type: "number",
+                        minWidth: 150,
+                        renderCell: (params) => <DelayChip minutes={params.row.avgDelay} />,
+                    },
+                    {
+                        field: "mapa",
+                        headerName: t("map.map"),
+                        hideable: false,
+                        flex: 1,
+                        minWidth: 150,
+                        sortable: false,
+                        renderCell: (params) => (
+                            <Button component={Link} to={mapLinesUrl(city, params.row.type, params.row.routeId)} size="small">
+                                {t("global.showOnMap")}
+                            </Button>
+                        ),
+                    },
+                ] as GridColDef<RouteDelay>[]
+            ).map(boldHeader),
+        [t, city],
+    );
     return (
         <Box sx={{ my: 2 }}>
             <SectionHeader types={types} selectedType={selectedType} title={t("delays.routeIdChartHeader")} subtitle={subtitle} />
@@ -127,37 +230,25 @@ const PerRouteSection = ({ city, stats, types, selectedType, subtitle }: { city:
                     <TopLinesChart data={stats.perRoute.slice(0, 10)} />
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="h6" sx={{ fontSize: "1.05rem" }}>
-                        {t("delays.routeIdAllDelays")}:
-                    </Typography>
-                    {mobile && (
+                    <Typography variant="h6">{t("delays.routeIdAllDelays")}:</Typography>
+                    {IS_MOBILE_AGENT && (
                         <Typography variant="body2" sx={{ textAlign: "center" }}>
                             {t("delays.tableIsMovable")}
                         </Typography>
                     )}
-                    <DataTable<RouteDelay>
-                        rows={stats.perRoute}
-                        getRowId={(row) => `${row.city}/${row.routeId}`}
-                        initialSort={{ field: "avgDelay", direction: "desc" }}
-                        columns={[
-                            { field: "type", header: t("delays.vehicleType"), value: (row) => typeName(row.type), minWidth: 80 },
-                            { field: "route", header: t("global.route_id"), value: (row) => row.routeName, minWidth: 60 },
-                            { field: "count", header: t("delays.vehiclesCount"), value: (row) => row.count, align: "right", minWidth: 60 },
-                            { field: "avgDelay", header: t("delays.averageDelay"), value: (row) => row.avgDelay, minWidth: 130, render: (row) => <DelayChip minutes={row.avgDelay} /> },
-                            {
-                                field: "map",
-                                header: t("map.map"),
-                                value: () => "",
-                                sortable: false,
-                                minWidth: 130,
-                                render: (row) => (
-                                    <Link to={mapLinesUrl(city, row.type, row.routeId)} style={{ color: "var(--primary)", fontSize: 13, fontWeight: 500, textTransform: "uppercase" }}>
-                                        {t("global.showOnMap")}
-                                    </Link>
-                                ),
-                            },
-                        ]}
-                    />
+                    <div style={{ height: 600 }}>
+                        <StatsDataGrid<RouteDelay>
+                            initialState={{
+                                sorting: { sortModel: [{ field: "avgDelay", sort: "desc" }] },
+                            }}
+                            getRowId={(row) => `${row.city}/${row.routeId}`}
+                            rows={stats.perRoute}
+                            columns={routeColumns}
+                            density="compact"
+                            disableColumnSelector
+                            disableDensitySelector
+                        />
+                    </div>
                 </Grid>
             </Grid>
         </Box>
@@ -176,12 +267,9 @@ export default function DelaysPage() {
     const types = useMemo(() => sortTypes((data?.vehicles ?? []).map((vehicle) => vehicle.type)), [data]);
     const requested = params.get("rodzaj");
     const selectedType: number | "total" = types.find((type) => tabKey(type) === requested) ?? "total";
-    const vehicles = useMemo(
-        () => (data?.vehicles ?? []).filter((vehicle) => selectedType === "total" || vehicle.type === selectedType),
-        [data, selectedType],
-    );
+    const vehicles = useMemo(() => (data?.vehicles ?? []).filter((vehicle) => selectedType === "total" || vehicle.type === selectedType), [data, selectedType]);
     const stats = useMemo(() => computeDelayStats(vehicles, city), [vehicles, city]);
-    const updated = data ? formatDateTime(data.updatedAt) : "";
+    const updated = data ? formatDateTime(data.updatedAt, true) : "";
     const groupName = selectedType === "total" ? t("delays.publicTransportVehicles") : typePlural(selectedType);
     const subtitle = `${groupName} ${agencyName}`;
     const typesLabel = types.map(typeName).join(", ");
@@ -201,10 +289,11 @@ export default function DelaysPage() {
         />
     );
 
+    const pageTitle = `${agencyName} - ${t("delays.pageTitle")} ${typesLabel}`;
     return (
         <>
-            <PageHeader title={`${agencyName} - ${t("delays.pageTitle")} ${typesLabel}`} />
-            <div className="page" style={{ maxWidth: 1400 }}>
+            <PageHeader title={pageTitle} />
+            <PageTemplate title={pageTitle} padding>
                 {loading && !data ? (
                     <Typography sx={{ mt: 3 }} variant="h5" gutterBottom>
                         {t("global.loading")}...
@@ -219,7 +308,7 @@ export default function DelaysPage() {
                 ) : !data || data.vehicles.length === 0 ? (
                     <>
                         {description}
-                        <Typography sx={{ mt: 3, fontSize: "1.2rem" }} variant="h5" gutterBottom>
+                        <Typography sx={{ mt: 3 }} variant="h5" gutterBottom>
                             {t("delays.noData")}
                         </Typography>
                     </>
@@ -240,9 +329,7 @@ export default function DelaysPage() {
                             />
                         )}
                         {stats.count === 0 ? (
-                            <Typography variant="h5" sx={{ fontSize: "1.2rem", mt: 2 }}>
-                                {t("delays.noData")}
-                            </Typography>
+                            <Typography variant="h5">{t("delays.noData")}</Typography>
                         ) : (
                             <>
                                 <Box sx={{ my: 2 }}>
@@ -253,7 +340,11 @@ export default function DelaysPage() {
                                     )}
                                     <Box sx={{ display: "flex", flexDirection: "column" }}>
                                         <Typography variant="caption" gutterBottom>
-                                            <Trans i18nKey="delays.basedOnNumberOfVehiclesPart1" values={{ count: stats.count }} components={[<strong key="1" />]} />
+                                            <Trans
+                                                i18nKey="delays.basedOnNumberOfVehiclesPart1"
+                                                values={{ count: stats.count }}
+                                                components={[<strong key="1" />]}
+                                            />
                                             {selectedType !== "total" && (
                                                 <>
                                                     {t("delays.basedOnNumberOfVehiclesPart2")}
@@ -278,17 +369,16 @@ export default function DelaysPage() {
                                     types={types}
                                     selectedType={selectedType}
                                     withDelay
-                                    csvName={`${cityName} - Opóźnienia pojazdów komunikacji miejskiej - ${updated}`}
                                 />
                                 <Divider sx={{ my: 2 }} />
                                 <VehicleGrid
                                     city={city}
                                     title={t("delays.noDelayGridHeader")}
                                     subtitle={subtitle}
-                                    vehicles={vehicles.filter((vehicle) => vehicle.state === "noTrip")}
+                                    vehicles={vehicles.filter((vehicle) => vehicle.delay === null && vehicle.tripId !== null)}
+                                    showEmpty
                                     types={types}
                                     selectedType={selectedType}
-                                    csvName={`${cityName} - Pojazdy bez opóźnienia - ${updated}`}
                                 />
                                 <Divider sx={{ my: 2 }} />
                                 <VehicleGrid
@@ -296,9 +386,9 @@ export default function DelaysPage() {
                                     title={t("delays.outsideGridHeader")}
                                     subtitle={subtitle}
                                     vehicles={vehicles.filter((vehicle) => vehicle.state === "offRoute")}
+                                    showEmpty
                                     types={types}
                                     selectedType={selectedType}
-                                    csvName={`${cityName} - Pojazdy poza trasą - ${updated}`}
                                 />
                                 <Divider sx={{ my: 2 }} />
                                 <PerRouteSection city={city} stats={stats} types={types} selectedType={selectedType} subtitle={subtitle} />
@@ -306,8 +396,7 @@ export default function DelaysPage() {
                         )}
                     </Box>
                 )}
-            </div>
+            </PageTemplate>
         </>
     );
 }
-

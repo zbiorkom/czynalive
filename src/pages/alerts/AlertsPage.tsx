@@ -1,4 +1,4 @@
-import { Box, Divider, Link as MuiLink, Skeleton, Typography } from "@mui/material";
+import { Box, Link as MuiLink, Skeleton, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -6,7 +6,7 @@ import { useCity } from "@/api/cities";
 import { AlertCard } from "@/components/alerts/AlertCard";
 import { ALERT_KINDS, formatDateTime, fromNow, type AlertKind } from "@/components/alerts/api";
 import { AlertKindTabs, DataError, NoAlerts, parseAlertKind, useCityAlerts } from "@/components/alerts/shared";
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
 
 export default function AlertsPage() {
     const { city = "", rodzaj } = useParams();
@@ -42,17 +42,24 @@ export default function AlertsPage() {
     const alerts = useMemo(() => (data?.alerts ?? []).filter((alert) => alert.kind === kind), [data, kind]);
     const agencyName = (cityInfo?.agencies?.default?.name as string | undefined) ?? cityInfo?.name ?? city;
 
+    const pageTitle = `${cityInfo?.name ?? city} - ${t("alerts.pageTitleAlerts")}`;
     return (
         <>
-            <PageHeader title={`${cityInfo?.name ?? city} - ${t("alerts.pageTitleAlerts")}`} documentTitle={`${agencyName} - ${t("alerts.pageTitleAlerts")}`} />
-            <div className="page">
+            <PageHeader title={pageTitle} documentTitle={`${agencyName} - ${t("alerts.pageTitleAlerts")}`} />
+            <PageTemplate title={pageTitle} padding>
                 {error && !data ? (
                     <Box sx={{ pb: "80px" }}>
                         <DataError error={error} />
                     </Box>
                 ) : loading && !data ? (
                     <>
-                        <div style={{ margin: 10, display: "flex", justifyContent: "space-between" }}>
+                        <div
+                            style={{
+                                margin: 10,
+                                display: "flex",
+                                justifyContent: "space-between",
+                            }}
+                        >
                             <Skeleton animation="wave" variant="text" height={50} width="100%" style={{ margin: "0 5px 5px" }} />
                             <Skeleton animation="wave" variant="text" height={50} width="100%" style={{ margin: "0 5px 5px" }} />
                         </div>
@@ -65,20 +72,19 @@ export default function AlertsPage() {
                 ) : (
                     <Box sx={{ pb: "80px" }}>
                         <AlertKindTabs value={kind} counts={counts} onChange={(next) => navigate(`/${city}/komunikaty/${next}`)} />
-                        <Divider />
                         <Box>
                             {alerts.map((alert) => (
                                 <div key={alert.id} ref={alert.id === focusId ? focusRef : undefined}>
-                                    <AlertCard city={city} alert={alert} />
+                                    <AlertCard city={city} alert={alert} fallbackPublished={data?.updatedAt} />
                                 </div>
                             ))}
                             {alerts.length === 0 && <NoAlerts />}
                         </Box>
                         {data && (
-                            <Typography variant="caption" component="p" sx={{ mt: 2 }}>
+                            <Typography variant="caption">
                                 <strong>{t("alerts.lastUpdateDate")}: </strong>
                                 <span>
-                                    {fromNow(data.updatedAt)}, {formatDateTime(data.updatedAt)}
+                                    {fromNow(data.updatedAt)}, {formatDateTime(data.updatedAt, true)}
                                 </span>
                             </Typography>
                         )}
@@ -91,7 +97,7 @@ export default function AlertsPage() {
                         </p>
                     </Box>
                 )}
-            </div>
+            </PageTemplate>
         </>
     );
 }

@@ -18,7 +18,7 @@ export const AlertKindTabs = ({ value, onChange, counts }: { value: AlertKind; o
                     value={kind}
                     label={
                         counts ? (
-                            <Badge anchorOrigin={{ vertical: "top", horizontal: "right" }} color="primary" badgeContent={counts[kind]} sx={{ "& .MuiBadge-badge": { right: -12 } }}>
+                            <Badge anchorOrigin={{ vertical: "top", horizontal: "right" }} color="primary" badgeContent={counts[kind]}>
                                 {t(ALERT_KIND_LABEL[kind])}
                             </Badge>
                         ) : (
@@ -34,7 +34,15 @@ export const AlertKindTabs = ({ value, onChange, counts }: { value: AlertKind; o
 export const NoAlerts = ({ subtitle = true }: { subtitle?: boolean }) => {
     const { t } = useTranslation();
     return (
-        <div style={{ display: "flex", placeItems: "center", flexDirection: "column", textAlign: "center", margin: 20 }}>
+        <div
+            style={{
+                display: "flex",
+                placeItems: "center",
+                flexDirection: "column",
+                textAlign: "center",
+                margin: 20,
+            }}
+        >
             <NoCrashIcon color="primary" fontSize="large" />
             <Typography variant="subtitle1" sx={{ p: subtitle ? "20px 0 0" : "20px 0", fontStyle: "italic" }}>
                 {t("alerts.noAlerts")}

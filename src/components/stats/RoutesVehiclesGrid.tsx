@@ -10,7 +10,7 @@ import { ERouteTuple } from "@/api/types";
 import { RouteChip } from "@/components/departures/RouteChip";
 import { formatDelay } from "@/lib/transit";
 import { delayMinutes, delayMinutesClass, mapLinesUrl, mapVehicleUrl, type LiveVehicle } from "./api";
-import { compareValues } from "./DataTable";
+import { compareValues } from "./StatsDataGrid";
 
 const COLUMN_WIDTH = 130;
 const MIN_COLUMNS = 2;
@@ -47,7 +47,7 @@ const VehicleEntry = memo(({ vehicle, city, duplicateBrigade }: { vehicle: LiveV
     );
     return (
         <Box sx={{ display: "inline-flex", flexDirection: "row", gap: "4px", alignItems: "center", justifyContent: "space-around" }}>
-            <MuiLink component={Link} to={mapVehicleUrl(city, vehicle.id)} sx={{ minWidth: "40px", fontSize: "0.875rem" }}>
+            <MuiLink component={Link} to={mapVehicleUrl(city, vehicle.id)} sx={{ minWidth: "40px" }}>
                 {vehicle.vehicleNo}
             </MuiLink>
             {vehicle.brigade && (
@@ -67,14 +67,14 @@ const VehicleEntry = memo(({ vehicle, city, duplicateBrigade }: { vehicle: LiveV
                     {minutes !== undefined ? (
                         <Box
                             className={`bg-${delayMinutesClass(minutes)} text-white`}
-                            sx={{ minWidth: "20px", px: 0.5, height: "20px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "10px", fontSize: "0.875rem", whiteSpace: "nowrap" }}
+                            sx={{ minWidth: "20px", px: 0.5, height: "20px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "12px", fontSize: "0.875rem", whiteSpace: "nowrap" }}
                         >
                             <Typography variant="caption" sx={{ lineHeight: 1, color: "#fff" }}>
                                 {minutes > 0 ? `+${minutes}` : minutes}
                             </Typography>
                         </Box>
                     ) : (
-                        <Box sx={{ width: "20px", height: "20px", borderRadius: "10px", border: "1px dashed var(--neutral-light)" }} />
+                        <Box sx={{ width: "20px", height: "20px" }} />
                     )}
                 </Box>
             </Tooltip>
@@ -223,14 +223,14 @@ export const RoutesVehiclesGrid = ({ routes, city, selected, onSelectedChange }:
                 <Box sx={{ width: "100%", border: "3px solid var(--neutral-light)" }}>
                     {rows.map((row, rowIndex) => (
                         <Box key={row.map((route) => route.key).join("-")} sx={{ borderBottom: rowIndex < rows.length - 1 ? "3px solid var(--neutral-light)" : "none" }}>
-                            <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, width: "100%" }}>
+                            <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(${COLUMN_WIDTH}px, 1fr))`, width: "100%" }}>
                                 {row.map((route, index) => (
                                     <Box key={route.key} sx={{ ...cellBorder(index, row.length), backgroundColor: "var(--default-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "center", width: "100%", py: 1 }}>
                                             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "center" }}>
-                                                <Link to={`/${route.city}/rozklad-jazdy/linia/${encodeURIComponent(route.routeId)}`} style={{ textDecoration: "none" }}>
-                                                    <RouteChip name={route.routeName} type={route.type} />
-                                                </Link>
+                                                <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                                                    {route.routeName}
+                                                </Typography>
                                                 <Typography variant="caption">{t("plural.vehicle", { count: route.vehicles.length })}</Typography>
                                             </Box>
                                             <Button
@@ -246,7 +246,7 @@ export const RoutesVehiclesGrid = ({ routes, city, selected, onSelectedChange }:
                                     </Box>
                                 ))}
                             </Box>
-                            <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, width: "100%" }}>
+                            <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(${COLUMN_WIDTH}px, 1fr))`, width: "100%" }}>
                                 {row.map((route, index) => {
                                     const duplicates = duplicateBrigades(route.vehicles);
                                     return (

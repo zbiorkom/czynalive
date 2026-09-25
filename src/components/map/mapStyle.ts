@@ -48,10 +48,13 @@ export const mapStyleFor = (layer: TileLayer, dark: boolean): StyleSpecification
 };
 
 export const attributionFor = (layer: TileLayer) =>
+    `<div data-nosnippet style="font-size: 10px; display: block; margin-bottom: 0 !important">${attributionText(layer)}</div>`;
+
+const attributionText = (layer: TileLayer) =>
     layer === "satellite"
         ? "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         : `© autorzy <a href="https://www.openstreetmap.org/copyright" class="link-unstyled" target="_blank" rel="nofollow noopener noreferrer">OpenStreetMap</a>${
               layer === "streets" ? ' | <a href="https://openfreemap.org" class="link-unstyled" target="_blank" rel="nofollow noopener noreferrer">OpenFreeMap</a>' : ""
           }`;
 
-export const normalizeTileLayer = (value: string | undefined): TileLayer => (value === "satellite" || value === "osm" ? value : "streets");
+export const normalizeTileLayer = (value: string | undefined): TileLayer => (value === "satellite" || value === "streets" ? value : "osm");

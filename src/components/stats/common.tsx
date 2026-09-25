@@ -1,5 +1,5 @@
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import ArrowDropUpIcon from "@mui/icons-material/ArrowDropUp";
 import { Box, Chip, IconButton, Paper, Tab, Tabs, Typography } from "@mui/material";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,7 +15,16 @@ export const VehicleTypesPill = ({ types, size = 32 }: { types: number[]; size?:
     if (types.length === 0) return null;
     const iconSize = Math.round(size * 0.625);
     return (
-        <Box sx={{ display: "inline-flex", alignItems: "center", height: size, borderRadius: "8px", overflow: "hidden", flexShrink: 0 }}>
+        <Box
+            sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                height: size,
+                borderRadius: "8px",
+                overflow: "hidden",
+                flexShrink: 0,
+            }}
+        >
             {types.map((type, index) => {
                 const first = index === 0;
                 const last = index === types.length - 1;
@@ -60,41 +69,67 @@ export const DelayChip = ({ minutes }: { minutes: number }) => {
     return (
         <Chip
             size="small"
-            label={`${Math.abs(minutes)} min ${minutes < 0 ? t("global.beforeTime").toLowerCase() : ""}`.trim()}
+            label={`${Math.abs(minutes)} min ${minutes < 0 ? t("global.beforeTime").toLowerCase() : ""}`}
             className={`bg-${delayMinutesClass(minutes)} text-white`}
-            sx={{ fontWeight: 500 }}
         />
     );
 };
 
-export const SectionHeader = ({ types, selectedType, title, subtitle }: { types: number[]; selectedType: number | "total"; title: ReactNode; subtitle: ReactNode }) =>
+export const SectionHeader = ({
+    types,
+    selectedType,
+    title,
+    subtitle,
+}: {
+    types: number[];
+    selectedType: number | "total";
+    title: ReactNode;
+    subtitle: ReactNode;
+}) =>
     selectedType !== "total" ? (
-        <div style={{ display: "flex", placeItems: "center", gap: 10, marginBottom: 10 }}>
+        <div
+            style={{
+                display: "flex",
+                placeItems: "center",
+                gap: 10,
+                marginBottom: 10,
+            }}
+        >
             <VehicleTypesPill types={[selectedType]} size={50} />
             <div>
-                <Typography variant="h6" sx={{ fontSize: "1.05rem", lineHeight: 1.3 }}>
-                    {title}
-                </Typography>
-                <Typography variant="h5" sx={{ fontSize: "1.2rem", fontWeight: 500 }}>
-                    {subtitle}
-                </Typography>
+                <Typography variant="h6">{title}</Typography>
+                <Typography variant="h5">{subtitle}</Typography>
             </div>
         </div>
     ) : (
-        <div style={{ display: "flex", placeItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
+        <div
+            style={{
+                display: "flex",
+                placeItems: "center",
+                flexWrap: "wrap",
+                gap: 10,
+                marginBottom: 10,
+            }}
+        >
             <VehicleTypesPill types={types} />
             <div>
-                <Typography variant="h6" sx={{ fontSize: "1.05rem", lineHeight: 1.3 }}>
-                    {title}
-                </Typography>
-                <Typography variant="h5" sx={{ fontSize: "1.2rem", fontWeight: 500 }}>
-                    {subtitle}
-                </Typography>
+                <Typography variant="h6">{title}</Typography>
+                <Typography variant="h5">{subtitle}</Typography>
             </div>
         </div>
     );
 
-export const TypeTabs = ({ value, types, onChange, allLabel }: { value: number | "total"; types: number[]; onChange: (value: number | "total") => void; allLabel?: string }) => {
+export const TypeTabs = ({
+    value,
+    types,
+    onChange,
+    allLabel,
+}: {
+    value: number | "total";
+    types: number[];
+    onChange: (value: number | "total") => void;
+    allLabel?: string;
+}) => {
     const { t } = useTranslation();
     return (
         <Tabs
@@ -105,14 +140,28 @@ export const TypeTabs = ({ value, types, onChange, allLabel }: { value: number |
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
+            sx={{ "& .MuiTabs-scrollButtons.Mui-disabled": { opacity: 0.3 } }}
         >
             <Tab value="total" label={allLabel ?? t("delays.allVehicles")} />
             {types.map((type) => (
-                <Tab key={type} value={type} label={typePlural(type)} />
+                <Tab key={type} value={type} label={typeName(type)} />
             ))}
         </Tabs>
     );
 };
+
+export const ShowMoreButton = ({ expanded, onClick }: { expanded: boolean; onClick: () => void }) => (
+    <IconButton
+        size="small"
+        onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onClick();
+        }}
+    >
+        {expanded ? <ArrowDropUpIcon sx={{ opacity: 0.3 }} /> : <ArrowDropDownIcon sx={{ opacity: 0.3 }} />}
+    </IconButton>
+);
 
 // Collapsible SEO description with "updated" line and share button.
 export const DescriptionBox = ({ lines, updated, shareText }: { lines: ReactNode[]; updated: string; shareText: string }) => {
@@ -125,41 +174,74 @@ export const DescriptionBox = ({ lines, updated, shareText }: { lines: ReactNode
                     flexDirection: "column",
                     ...(expanded
                         ? { display: "flex" }
-                        : { overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 1, whiteSpace: "pre-wrap", lineHeight: "34px" }),
+                        : {
+                              overflow: "hidden",
+                              display: "-webkit-box",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 1,
+                              whiteSpace: "pre-wrap",
+                              lineHeight: "34px",
+                          }),
                 }}
             >
                 {lines.map((line, index) => (
-                    <Typography key={index} variant="caption" gutterBottom component="p">
+                    <Typography key={index} variant="caption" gutterBottom>
                         {line}
                     </Typography>
                 ))}
-                <Typography variant="caption" gutterBottom component="p">
+                <Typography variant="caption" gutterBottom>
                     {t("delays.statsAreAutomaticallyRefreshed")}
                 </Typography>
-                <Typography variant="caption" gutterBottom component="p">
+                <Typography variant="caption" gutterBottom>
                     {t("global.updated")}: {updated}
                 </Typography>
-                <Typography variant="caption" component="p" data-nosnippet>
+                <Typography variant="caption" data-nosnippet>
                     {t("global.shareUrl")}:
                     <ShareButton text={shareText} />
                 </Typography>
             </Box>
-            <IconButton onClick={() => setExpanded((value) => !value)} aria-label={expanded ? "Zwiń" : "Rozwiń"} sx={{ alignSelf: "flex-start" }}>
-                {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </IconButton>
+            <ShowMoreButton expanded={expanded} onClick={() => setExpanded((value) => !value)} />
         </Box>
     );
 };
 
-export const StatTile = ({ title, value, suffix, className, additional }: { title: string; value: number; suffix: string; className?: string; additional?: ReactNode }) => (
+export const StatTile = ({
+    title,
+    value,
+    suffix,
+    className,
+    additional,
+}: {
+    title: string;
+    value: number;
+    suffix: string;
+    className?: string;
+    additional?: ReactNode;
+}) => (
     <Paper
-        sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", position: "relative" }}
+        sx={{
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            position: "relative",
+        }}
     >
-        <Box sx={{ alignItems: "center", display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "center", p: 1 }}>
+        <Box
+            sx={{
+                alignItems: "center",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                textAlign: "center",
+                p: 1,
+            }}
+        >
             <Typography variant="body2" gutterBottom>
                 {title}:
             </Typography>
-            <Chip size="small" label={`${Math.abs(value)} ${suffix}`} sx={{ mb: 1, fontWeight: 500 }} className={className} />
+            <Chip size="small" label={`${Math.abs(value)} ${suffix}`} sx={{ mb: 1 }} className={className} />
             {additional}
         </Box>
         <Box sx={{ position: "absolute", bottom: 0, right: 2, opacity: 0.1 }}>

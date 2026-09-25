@@ -1,14 +1,13 @@
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import ClearIcon from "@mui/icons-material/Clear";
-import { Box, Divider, IconButton, InputAdornment, List, ListItemButton, TextField, Typography } from "@mui/material";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import EastIcon from "@mui/icons-material/East";
+import { Box, List, TextField, Typography } from "@mui/material";
+import { ClearButton } from "./SearchField";
+import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { cityGet } from "@/api/client";
 import { ERouteTuple, EStopTuple, type RouteTuple, type StopTuple, type StopTupleDetailed } from "@/api/types";
 import { RouteChip } from "@/components/departures/RouteChip";
-import { sortRoutes, TypeCircles } from "./common";
+import { Highlight, ListRow, ShowMoreButton, StopNameBadge } from "@/components/departures/parts";
+import { sortRoutes, sortTypes, uniqueRoutes } from "./common";
 
 export type SearchStopResult = [firstStopId: string, city: string, groupName: string, stops: StopTupleDetailed[]];
 type RawSearch = { stops: SearchStopResult[]; stations: [stopId: string, city: string, name: string][] };
@@ -51,69 +50,74 @@ export const useStopSearch = (city: string, query: string) => {
     return state;
 };
 
-const MAX_CHIPS = 10;
+const MAX_CHIPS = 5;
 
-export const StopItemContent = ({ stop }: { stop: StopTuple | StopTupleDetailed }) => {
+// Stop result of the original (nge): stop badge with type blocks, direction, first lines + show more.
+export const StopItemContent = ({ stop, query }: { stop: StopTuple | StopTupleDetailed; query?: string }) => {
     const [expanded, setExpanded] = useState(false);
-    const direction = (stop as StopTupleDetailed)[EStopTuple.direction] as string | undefined;
-    const routes = sortRoutes(((stop as StopTupleDetailed)[EStopTuple.routes] as RouteTuple[] | undefined) ?? []);
-    const shown = expanded ? routes : routes.slice(0, MAX_CHIPS);
+    const direction = ((stop as StopTupleDetailed)[EStopTuple.direction] as string | undefined) ?? "";
+    const routes = uniqueRoutes(sortRoutes(((stop as StopTupleDetailed)[EStopTuple.routes] as RouteTuple[] | undefined) ?? []));
+    const types = sortTypes(stop[EStopTuple.vehicleTypes].length ? stop[EStopTuple.vehicleTypes] : routes.map((route) => route[ERouteTuple.routeType]));
+    const more = routes.length > MAX_CHIPS;
+    const shown = more && !expanded ? routes.slice(0, MAX_CHIPS) : routes;
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5, maxWidth: "100%", minWidth: 0 }}>
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, maxWidth: "100%" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, border: "1px solid var(--neutral-light)", borderRadius: "14px", pr: 1.25, height: 28 }}>
-                    <TypeCircles types={stop[EStopTuple.vehicleTypes]} size={26} />
-                    <Typography variant="body2" sx={{ fontWeight: 500, textTransform: "uppercase" }} noWrap>
-                        {stop[EStopTuple.stopName]} {stop[EStopTuple.stopCode]}
-                    </Typography>
-                </Box>
-                {direction ? (
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5, maxWidth: "100%" }}>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.5, maxWidth: "100%" }}>
+                <StopNameBadge stopTypes={types} text={<Highlight text={stop[EStopTuple.stopName]} query={query} />} angledDivider />
+                {direction !== "" && (
                     <Typography variant="body2" color="textSecondary" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                        <ArrowForwardIcon fontSize="inherit" /> {direction}
+                        <EastIcon fontSize="inherit" /> {direction}
                     </Typography>
-                ) : null}
+                )}
             </Box>
             {routes.length > 0 && (
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5, alignItems: "center" }}>
-                    {shown.map((route) => (
-                        <RouteChip key={`${route[ERouteTuple.city]}/${route[ERouteTuple.routeId]}`} name={route[ERouteTuple.routeName]} type={route[ERouteTuple.routeType]} sx={{ height: 22 }} />
+                    {shown.map((route, index) => (
+                        <Fragment key={`${route[ERouteTuple.city]}/${route[ERouteTuple.routeId]}`}>
+                            <RouteChip
+                                name={route[ERouteTuple.routeName]}
+                                type={route[ERouteTuple.routeType]}
+                                animate={false}
+                                sx={{ height: "22px", fontSize: "0.875rem", "& .MuiChip-label": { paddingLeft: "8px", paddingRight: "8px" } }}
+                            />
+                            {more && expanded && index === MAX_CHIPS - 1 && <ShowMoreButton expanded={expanded} onClick={() => setExpanded((value) => !value)} />}
+                        </Fragment>
                     ))}
-                    {routes.length > MAX_CHIPS && (
-                        <Typography
-                            variant="caption"
-                            component="span"
-                            sx={{ cursor: "pointer", textDecoration: "underline" }}
-                            onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setExpanded((value) => !value);
-                            }}
-                        >
-                            {expanded ? "mniej" : `+${routes.length - MAX_CHIPS}`}
-                        </Typography>
-                    )}
+                    {more && <ShowMoreButton expanded={expanded} onClick={() => setExpanded((value) => !value)} />}
                 </Box>
             )}
         </Box>
     );
 };
 
-export const StopList = ({ stops, linkFor, onSelect, trailing }: { stops: StopTuple[]; linkFor?: (stop: StopTuple) => string; onSelect?: (stop: StopTuple) => void; trailing?: (stop: StopTuple) => ReactNode }) => (
-    <List disablePadding>
-        {stops.map((stop) => {
-            const props = linkFor ? { component: Link, to: linkFor(stop), onClick: () => onSelect?.(stop) } : { onClick: () => onSelect?.(stop) };
-            return (
-                <Fragment key={`${stop[EStopTuple.city]}/${stop[EStopTuple.stopId]}`}>
-                    <ListItemButton {...(props as object)} sx={{ py: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <StopItemContent stop={stop} />
-                        </Box>
-                        {trailing ? trailing(stop) : <ChevronRightIcon color="action" />}
-                    </ListItemButton>
-                    <Divider sx={{ opacity: 0.6 }} />
-                </Fragment>
-            );
-        })}
+export const StopList = ({
+    stops,
+    linkFor,
+    onSelect,
+    trailing,
+    query,
+    style,
+}: {
+    stops: StopTuple[];
+    linkFor?: (stop: StopTuple) => string;
+    onSelect?: (stop: StopTuple) => void;
+    trailing?: (stop: StopTuple) => ReactNode;
+    query?: string;
+    style?: CSSProperties;
+}) => (
+    <List style={style}>
+        {stops.map((stop) => (
+            <ListRow
+                key={`${stop[EStopTuple.city]}/${stop[EStopTuple.stopId]}`}
+                to={linkFor?.(stop)}
+                onClick={() => onSelect?.(stop)}
+                action="navigate"
+                trailing={trailing ? trailing(stop) : undefined}
+                column
+            >
+                <StopItemContent stop={stop} query={query} />
+            </ListRow>
+        ))}
     </List>
 );
 
@@ -132,15 +136,7 @@ export const StopSearchField = ({ value, onChange, label, placeholder }: { value
                 size="small"
                 fullWidth
                 slotProps={{
-                    input: {
-                        endAdornment: value ? (
-                            <InputAdornment position="end">
-                                <IconButton size="small" onClick={() => onChange("")} aria-label={t("global.clear")}>
-                                    <ClearIcon fontSize="small" />
-                                </IconButton>
-                            </InputAdornment>
-                        ) : undefined,
-                    },
+                    input: { endAdornment: <ClearButton visible={value !== ""} onClear={() => onChange("")} /> },
                     inputLabel: { shrink: true },
                 }}
             />

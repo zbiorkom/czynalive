@@ -9,7 +9,7 @@ export const DATE_PARAM = "dzien";
 
 export const formatDateTab = (index: number) => {
     const date = dateIndexToDate(index);
-    const weekday = date.toLocaleDateString("pl-PL", { weekday: "short", timeZone: "UTC" });
+    const weekday = date.toLocaleDateString("pl-PL", { weekday: "short", timeZone: "UTC" }).replace(/\.$/, "");
     const day = date.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
     return `${weekday}, ${day}`;
 };
@@ -49,10 +49,9 @@ export const DateTabs = ({ dates, selected, onChange }: { dates: number[]; selec
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
-            sx={{ mb: 1 }}
         >
             {list.map((date) => (
-                <Tab key={date} label={formatDateTab(date)} sx={{ minWidth: 0, px: 1.5, textTransform: "none" }} />
+                <Tab key={date} label={formatDateTab(date)} />
             ))}
         </Tabs>
     );

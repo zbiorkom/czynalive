@@ -1,4 +1,4 @@
-import { Box, Breadcrumbs, Divider, Link as MuiLink, Pagination, Typography } from "@mui/material";
+import { Box, Breadcrumbs, Link as MuiLink, Pagination, Typography } from "@mui/material";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -6,7 +6,7 @@ import { useCity } from "@/api/cities";
 import { AlertCard } from "@/components/alerts/AlertCard";
 import { alertTimestamp } from "@/components/alerts/api";
 import { AlertKindTabs, CardsSkeleton, DataError, NoAlerts, parseAlertKind, useCityAlerts } from "@/components/alerts/shared";
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader, PageTemplate } from "@/components/PageHeader";
 
 const PAGE_SIZE = 10;
 
@@ -29,10 +29,11 @@ export default function AlertsHistoryPage() {
     const pagesCount = Math.ceil(alerts.length / PAGE_SIZE);
     const pageAlerts = alerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+    const pageTitle = `${cityName} - ${t("alerts.pageTitleHistory")}`;
     return (
         <>
-            <PageHeader title={`${cityName} - ${t("alerts.pageTitleHistory")}`} documentTitle={`${agencyName} - ${t("alerts.pageTitleHistory")}`} back={`/${city}/komunikaty/${kind}`} />
-            <div className="page">
+            <PageHeader title={pageTitle} documentTitle={`${agencyName} - ${t("alerts.pageTitleHistory")}`} back={`/${city}/komunikaty/${kind}`} />
+            <PageTemplate title={pageTitle} padding>
                 <Box sx={{ pb: "80px" }}>
                     <Breadcrumbs aria-label="breadcrumb" sx={{ pb: "20px" }}>
                         <Typography variant="caption">
@@ -45,7 +46,6 @@ export default function AlertsHistoryPage() {
                         </Typography>
                     </Breadcrumbs>
                     <AlertKindTabs value={kind} onChange={(next) => navigate(`/${city}/komunikaty/historia/${next}/1`)} />
-                    <Divider />
                     <Box>
                         {error && !data ? (
                             <DataError error={error} />
@@ -54,7 +54,7 @@ export default function AlertsHistoryPage() {
                         ) : (
                             <>
                                 {pageAlerts.map((alert) => (
-                                    <AlertCard key={alert.id} city={city} alert={alert} history />
+                                    <AlertCard key={alert.id} city={city} alert={alert} history fallbackPublished={data?.updatedAt} />
                                 ))}
                                 {pageAlerts.length === 0 && <NoAlerts subtitle={false} />}
                             </>
@@ -62,16 +62,16 @@ export default function AlertsHistoryPage() {
                     </Box>
                     {pagesCount > 0 && (
                         <Box sx={{ m: 3, display: "flex", justifyContent: "center" }}>
-                            <Pagination count={pagesCount} page={page} color="primary" onChange={(_, next) => navigate(`/${city}/komunikaty/historia/${kind}/${next}`)} />
+                            <Pagination
+                                count={pagesCount}
+                                page={page}
+                                color="primary"
+                                onChange={(_, next) => navigate(`/${city}/komunikaty/historia/${kind}/${next}`)}
+                            />
                         </Box>
                     )}
-                    {data && (
-                        <Typography variant="caption" color="text.secondary" component="p">
-                            Archiwum obejmuje komunikaty, które przewoźnik wciąż publikuje — starsze, wycofane komunikaty nie są przechowywane.
-                        </Typography>
-                    )}
                 </Box>
-            </div>
+            </PageTemplate>
         </>
     );
 }

@@ -51,8 +51,7 @@ const DELAY_RANGES: { from: number; to: number; className: string }[] = [
 
 export const delayMinutesClass = (minutes: number | undefined | null) => {
     if (minutes === undefined || minutes === null) return "delayed-no-data";
-    const rounded = Math.round(minutes);
-    return DELAY_RANGES.find((range) => rounded >= range.from && rounded <= range.to)?.className ?? "delayed-no-data";
+    return DELAY_RANGES.find((range) => minutes >= range.from && minutes <= range.to)?.className ?? "delayed-no-data";
 };
 
 // Seconds -> whole minutes, truncated towards zero like czynaczas.
