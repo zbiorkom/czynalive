@@ -1,4 +1,8 @@
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import CheckIcon from "@mui/icons-material/Check";
+import HistoryIcon from "@mui/icons-material/History";
+import UpdateIcon from "@mui/icons-material/Update";
+import { useTranslation } from "react-i18next";
 import ArrowDropUpIcon from "@mui/icons-material/ArrowDropUp";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import {
@@ -547,4 +551,32 @@ export const Highlight = ({ text, query }: { text: string; query?: string }) => 
     }
     if (last < text.length) parts.push({ value: text.slice(last), match: false, start: last });
     return <>{parts.map((part) => (part.match ? <b key={`m-${part.start}`}>{part.value}</b> : <span key={`t-${part.start}`}>{part.value}</span>))}</>;
+};
+
+// Delay chip of the original (x$): "5 min opóźnienia" / "2 min przed czasem" / "zgodnie z rozkładem".
+export const DelayChip = ({ delayInSeconds, delayMinutes, style }: { delayInSeconds?: number; delayMinutes?: number; style?: CSSProperties }) => {
+    const { t } = useTranslation();
+    if (delayInSeconds === undefined && delayMinutes === undefined) return null;
+    const seconds = delayInSeconds ?? 0;
+    const minutes = delayMinutes !== undefined ? delayMinutes : seconds > 0 ? Math.floor(seconds / 60) : Math.floor(Math.abs(seconds / 60)) * -1;
+    const className = `bg-${delayClassOf(minutes)} text-white`;
+    const label =
+        minutes > 0 ? `${minutes} min ${t("global.delayed").toLowerCase()}` : minutes < 0 ? `${Math.abs(minutes)} min ${t("global.beforeTime").toLowerCase()}` : t("global.onTime").toLowerCase();
+    const Icon = minutes > 0 ? HistoryIcon : minutes < 0 ? UpdateIcon : CheckIcon;
+    return (
+        <Chip
+            size="small"
+            component="span"
+            icon={<Icon className="text-white" fontSize="inherit" />}
+            sx={{ height: "20px", marginTop: "3px", borderRadius: "8px" }}
+            label={
+                <Typography variant="body2" component="span">
+                    {label}
+                </Typography>
+            }
+            clickable={false}
+            style={style}
+            className={className}
+        />
+    );
 };

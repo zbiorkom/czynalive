@@ -1,6 +1,7 @@
 import { Alert, AlertTitle, Box, IconButton, Snackbar, Tooltip, Typography } from "@mui/material";
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { EAlertTuple, type AlertTuple } from "@/api/types";
+import { showToast } from "./Toasts";
 
 export const SheetIconButton = ({ title, onClick, children, active }: { title: string; onClick: (event: ReactMouseEvent<HTMLElement>) => void; children: ReactNode; active?: boolean }) => (
     <Tooltip title={title}>
@@ -47,16 +48,4 @@ export const AlertList = ({ alerts }: { alerts: AlertTuple[] }) => {
     );
 };
 
-export const useToast = () => {
-    const [message, setMessage] = useState<string | null>(null);
-    const element = (
-        <Snackbar
-            open={!!message}
-            message={message}
-            autoHideDuration={2500}
-            onClose={() => setMessage(null)}
-            anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        />
-    );
-    return { show: setMessage, element };
-};
+export const useToast = () => ({ show: (message: string) => showToast(message), element: null });

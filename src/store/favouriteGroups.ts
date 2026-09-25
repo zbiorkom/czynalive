@@ -13,7 +13,7 @@ export type FavouriteItem =
 
 export type FavouriteType = FavouriteItem["favouriteType"];
 
-export type FavouriteGroup = { id: number; name: string; items: FavouriteItem[]; expanded: boolean };
+export type FavouriteGroup = { id: number; name: string; items: FavouriteItem[]; expanded: boolean; favouriteDeparturesOnly?: boolean };
 
 export const GROUP_NAME_LIMITS = { MIN_NAME_LENGTH: 1, MAX_NAME_LENGTH: 100 };
 

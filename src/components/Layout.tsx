@@ -223,7 +223,7 @@ const BottomMenu = () => {
                                 label={label}
                                 value={path}
                                 icon={
-                                    <IconButton component="span" color="inherit" size="large" sx={{ p: 0 }} aria-label={label}>
+                                    <IconButton component="div" color="inherit" size="large" sx={{ p: 0 }} aria-label={label}>
                                         {entry.icon}
                                     </IconButton>
                                 }

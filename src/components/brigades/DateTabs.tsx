@@ -7,9 +7,12 @@ import { dateIndexToDate, todayDateIndex } from "@/lib/transit";
 
 export const DATE_PARAM = "dzien";
 
+// dayjs "pl" weekdaysShort, as in the original tabs.
+const WEEKDAYS_SHORT = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+
 export const formatDateTab = (index: number) => {
     const date = dateIndexToDate(index);
-    const weekday = date.toLocaleDateString("pl-PL", { weekday: "short", timeZone: "UTC" }).replace(/\.$/, "");
+    const weekday = WEEKDAYS_SHORT[date.getUTCDay()];
     const day = date.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
     return `${weekday}, ${day}`;
 };

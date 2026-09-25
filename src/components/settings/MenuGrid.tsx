@@ -25,7 +25,7 @@ export const MenuGrid = ({ items, city }: { items: RouteConfig[]; city: string }
                         color: "var(--default-text)",
                     }}
                 >
-                    <IconButton component="span">{item.settingsIcon}</IconButton>
+                    <IconButton component="div">{item.settingsIcon}</IconButton>
                     <Typography variant="caption">{t(item.menuTitleKey ?? "")}</Typography>
                 </Grid>
             ))}

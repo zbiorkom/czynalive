@@ -1,9 +1,10 @@
 import { Box, Button, Skeleton, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { EDeparture, EStopDepartureTuple, ETripTuple, type StopDepartureTuple } from "@/api/types";
 import { useSettings } from "@/store/settings";
-import { DepartureRow } from "./DepartureRow";
+import { useVehicleExtras } from "@/components/map/hooks";
+import { DepartureRow, VehicleExtrasContext } from "./DepartureRow";
 import { useNow } from "./departureUtils";
 import { useStopDepartures } from "./useStopDepartures";
 
@@ -28,6 +29,8 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 10, compact
     const now = useNow();
     const [active, setActive] = useState<number | null>(null);
     const { departures, error } = useStopDepartures(city, stopId, { limit, routes });
+    const provided = useContext(VehicleExtrasContext);
+    const ownExtras = useVehicleExtras(city, provided === null);
 
     useEffect(() => setLimit(initialLimit), [city, stopId, initialLimit]);
     useEffect(() => setLoadingMore(false), [departures]);
@@ -59,6 +62,7 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 10, compact
     }
 
     return (
+        <VehicleExtrasContext.Provider value={provided ?? ownExtras}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
             {departures.map((departure, index) => (
                 <DepartureRow
@@ -96,6 +100,7 @@ export const LiveDepartures = ({ city, stopId, limit: initialLimit = 10, compact
                 </Button>
             )}
         </Box>
+        </VehicleExtrasContext.Provider>
     );
 };
 

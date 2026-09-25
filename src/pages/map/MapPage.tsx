@@ -26,6 +26,8 @@ import { LayersDialog } from "@/components/map/LayersDialog";
 import { MapControls } from "@/components/map/MapControls";
 import { attributionFor, mapStyleFor, normalizeTileLayer } from "@/components/map/mapStyle";
 import { MapLogo } from "@/components/map/MapLogo";
+import { CloseToastButton, showToast, ToastHost } from "@/components/map/Toasts";
+import { openSse } from "@/components/map/sse";
 import { StopLayer, STOPS_ZOOM, type TripOverlayData } from "@/components/map/StopLayer";
 import { StopSheet } from "@/components/map/StopSheet";
 import { VehicleLayer } from "@/components/map/VehicleLayer";
@@ -86,10 +88,30 @@ export default function MapPage() {
     const [layersOpen, setLayersOpen] = useState(false);
     const [favouritesMode, setFavouritesMode] = useState(false);
     const [vehicleFilter, setVehicleFilter] = useState<string[]>([]);
-    const [toast, setToast] = useState<{
-        text: string;
-        action?: { label: string; run: () => void };
-    } | null>(null);
+    const setToast = (value: { text: string; action?: { label: string; run: () => void } } | null) => {
+        if (!value) return;
+        const action = value.action;
+        showToast(value.text, {
+            key: value.text,
+            action: action
+                ? (close) => (
+                      <>
+                          <Button
+                              size="small"
+                              sx={{ color: "var(--white)" }}
+                              onClick={() => {
+                                  action.run();
+                                  close();
+                              }}
+                          >
+                              {action.label}
+                          </Button>
+                          <CloseToastButton onClick={close} />
+                      </>
+                  )
+                : undefined,
+        });
+    };
     const [sheet, setSheet] = useState<{ px: number; side: boolean }>({
         px: 0,
         side: false,
@@ -103,6 +125,19 @@ export default function MapPage() {
     const [selectedStop, setSelectedStop] = useState<StopTupleDetailed | null>(null);
     const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
     const { favourites } = useFavourites(city);
+    const [showStops, setShowStopsState] = useState(() => {
+        try {
+            return localStorage.getItem(`czynalive:${city}.show.stops`) !== "false";
+        } catch {
+            return true;
+        }
+    });
+    const setShowStops = (value: boolean) => {
+        setShowStopsState(value);
+        try {
+            localStorage.setItem(`czynalive:${city}.show.stops`, String(value));
+        } catch {}
+    };
 
     const stopId = params.get("przystanek");
     const vehicleId = params.get("pojazd");
@@ -418,8 +453,8 @@ export default function MapPage() {
             stopLayer.setStops(selectedStop ? [selectedStop.slice(0, 7) as StopTuple] : [], true);
             return;
         }
-        stopLayer.setStops(features.stops, !overlay && zoom >= STOPS_ZOOM);
-    }, [map, features.stops, overlay, zoom >= STOPS_ZOOM, selectedStop, stopId]);
+        stopLayer.setStops(features.stops, !overlay && showStops && zoom >= STOPS_ZOOM);
+    }, [map, features.stops, overlay, zoom >= STOPS_ZOOM, selectedStop, stopId, showStops]);
 
     useEffect(() => {
         stopLayerRef.current?.setTrip(overlay);
@@ -578,8 +613,10 @@ export default function MapPage() {
 
     const suggested = features.suggestedCity && features.suggestedCity !== dismissedSuggestion ? byId[features.suggestedCity] : undefined;
 
-    const applyFilter = (value: MapFilter) => {
+    // Saving the filter frames every matching vehicle of the city and says how many there are.
+    const applyFilter = (value: MapFilter, stopsVisible = showStops) => {
         setFavouritesMode(false);
+        setShowStops(stopsVisible);
         setSettings((prev) => ({
             mapFilters: {
                 ...prev.mapFilters,
@@ -587,7 +624,19 @@ export default function MapPage() {
             },
         }));
         setVehicleFilter(value.vehicles);
-        if (value.routes.length || value.vehicles.length) setToast({ text: t("map.cautionFilteringTurnedOn") });
+        if (!value.routes.length) return;
+        const handle = openSse<unknown, { positions: VehiclePosition[] }>(`/${city}/mapFeatures/0/0,0,0,0/stream`, { graph: 1, filterRoutes: value.routes.join(",") }, {
+            onMessage: (message) => {
+                handle.close();
+                const positions = message.positions ?? [];
+                setToast({ text: `${t("global.found")} ${t("plural.vehicle", { count: positions.length })}.` });
+                if (!map || !positions.length) return;
+                const first = positions[0][EVehiclePosition.location];
+                const bounds = new maplibregl.LngLatBounds(first, first);
+                for (const position of positions) bounds.extend(position[EVehiclePosition.location]);
+                setTimeout(() => map.fitBounds(bounds, { padding: 70, maxZoom: 15, duration: 250 }), 300);
+            },
+        });
     };
     const resetFilter = () => {
         setFavouritesMode(false);
@@ -656,7 +705,7 @@ export default function MapPage() {
                     <MapControls
                         map={map}
                         showBar={!selectionActive && !stopId}
-                        filterActive={filterActive}
+                        filterActive={filterActive || !showStops}
                         favouritesActive={favouritesMode}
                         located={!!geo.position}
                         locating={geo.waiting}
@@ -736,7 +785,12 @@ export default function MapPage() {
                 city={city}
                 value={filter}
                 onClose={() => setFilterOpen(false)}
+                showStops={showStops}
                 onApply={applyFilter}
+                onReset={() => {
+                    resetFilter();
+                    setShowStops(true);
+                }}
                 onToast={(text) => setToast({ text })}
             />
             {layersOpen && (
@@ -748,27 +802,7 @@ export default function MapPage() {
                     dark={dark}
                 />
             )}
-            <Snackbar
-                open={!!toast}
-                message={toast?.text}
-                autoHideDuration={4000}
-                onClose={(_, reason) => reason !== "clickaway" && setToast(null)}
-                anchorOrigin={{ vertical: "top", horizontal: "center" }}
-                action={
-                    toast?.action && (
-                        <Button
-                            size="small"
-                            sx={{ color: "var(--white)" }}
-                            onClick={() => {
-                                toast.action!.run();
-                                setToast(null);
-                            }}
-                        >
-                            {toast.action.label}
-                        </Button>
-                    )
-                }
-            />
+            <ToastHost />
             <Snackbar
                 open={!!suggested && !selectionActive && !stopId}
                 message={`${t("map.changeCityPart2")} ${suggested?.name ?? ""}?`}
