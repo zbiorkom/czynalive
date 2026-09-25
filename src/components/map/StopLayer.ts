@@ -206,6 +206,7 @@ export class StopLayer {
             ? this.cities.map((city) => ({ type: "Feature", geometry: { type: "Point", coordinates: city.location }, properties: { id: city.id, icon: cityPillId(map, city.id, city.name) } }))
             : [];
         (map.getSource(CITIES) as GeoJSONSource | undefined)?.setData(collection(cityFeatures));
+        if (cityFeatures.length && map.getLayer(CITIES)) map.moveLayer(CITIES);
         this.renderTripStops();
     };
 }

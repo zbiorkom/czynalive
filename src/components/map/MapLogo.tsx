@@ -25,3 +25,12 @@ export const MapLogo = ({ bottom }: { bottom: number }) => (
         </div>
     </div>
 );
+
+// Dimmed full-screen spinner shown until the first live vehicle update arrives.
+export const MapLoadingOverlay = () => (
+    <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 400 }}>
+        <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
+            <div className="spinner" />
+        </div>
+    </div>
+);

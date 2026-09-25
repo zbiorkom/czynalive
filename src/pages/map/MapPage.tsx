@@ -25,8 +25,8 @@ import { useMapFeatures, useVehicleExtras, useViewport, useWatchedVehicles } fro
 import { LayersDialog } from "@/components/map/LayersDialog";
 import { MapControls } from "@/components/map/MapControls";
 import { attributionFor, mapStyleFor, normalizeTileLayer } from "@/components/map/mapStyle";
-import { MapLogo } from "@/components/map/MapLogo";
-import { CloseToastButton, showToast, ToastHost } from "@/components/map/Toasts";
+import { MapLoadingOverlay, MapLogo } from "@/components/map/MapLogo";
+import { showToast, ToastHost } from "@/components/map/Toasts";
 import { openSse } from "@/components/map/sse";
 import { StopLayer, STOPS_ZOOM, type TripOverlayData } from "@/components/map/StopLayer";
 import { StopSheet } from "@/components/map/StopSheet";
@@ -43,6 +43,7 @@ import { useSettings } from "@/store/settings";
 const DEFAULT_ZOOM = 15;
 const FOLLOW_ZOOM = 15;
 const ZOOM_HINT_KEY = "czynalive:map:zoomHintDismissed";
+const IS_MOBILE = typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
 
 // `lines=` accepts route ids and the czynaczas `<routeType>/<routeId>` form.
 const parseLines = (value: string | null) =>
@@ -81,6 +82,7 @@ export default function MapPage() {
     const rootRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<maplibregl.Map | null>(null);
+    const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
     const vehicleLayerRef = useRef<VehicleLayer | null>(null);
     const stopLayerRef = useRef<StopLayer | null>(null);
     const [zoom, setZoom] = useState(DEFAULT_ZOOM);
@@ -95,19 +97,16 @@ export default function MapPage() {
             key: value.text,
             action: action
                 ? (close) => (
-                      <>
-                          <Button
-                              size="small"
-                              sx={{ color: "var(--white)" }}
-                              onClick={() => {
-                                  action.run();
-                                  close();
-                              }}
-                          >
-                              {action.label}
-                          </Button>
-                          <CloseToastButton onClick={close} />
-                      </>
+                      <Button
+                          size="small"
+                          sx={{ color: "var(--white)" }}
+                          onClick={() => {
+                              action.run();
+                              close();
+                          }}
+                      >
+                          {action.label}
+                      </Button>
                   )
                 : undefined,
         });
@@ -217,6 +216,7 @@ export default function MapPage() {
         instance.keyboard.disableRotation();
         installImageGenerator(instance);
         instance.once("load", () => setMap(instance));
+        setMapInstance(instance);
         instance.on("zoomend", () => setZoom(instance.getZoom()));
         setZoom(view[2]);
 
@@ -246,6 +246,7 @@ export default function MapPage() {
             vehicleLayerRef.current = null;
             stopLayerRef.current = null;
             setMap(null);
+            setMapInstance(null);
             instance.remove();
         };
     }, [city, !!cityInfo]);
@@ -395,7 +396,18 @@ export default function MapPage() {
         const source = filter.vehicles.length ? watched : features.positions;
         if (!filter.vehicleTypes.length) return source;
         return source.filter((vehicle) => filter.vehicleTypes.includes(vehicle[EVehiclePosition.route][ERouteTuple.routeType]));
-    }, [vehicleId, tripId, stopId, stopVehicle, vehicleLive.position, tripLive.position, features.positions, watched, filter.vehicleTypes.join(","), filter.vehicles.length]);
+    }, [
+        vehicleId,
+        tripId,
+        stopId,
+        stopVehicle,
+        vehicleLive.position,
+        tripLive.position,
+        features.positions,
+        watched,
+        filter.vehicleTypes.join(","),
+        filter.vehicles.length,
+    ]);
 
     const dots = selectionActive || filter.vehicles.length || filter.vehicleTypes.length ? [] : features.dots;
     const markerOptions = {
@@ -468,7 +480,10 @@ export default function MapPage() {
     }, [map, overlay]);
 
     const cityPills = useMemo(
-        () => Object.values(byId ?? {}).filter((entry) => !entry.virtual).map((entry) => ({ id: entry.id, name: entry.name, location: entry.location as Point })),
+        () =>
+            Object.values(byId ?? {})
+                .filter((entry) => !entry.virtual)
+                .map((entry) => ({ id: entry.id, name: entry.name, location: entry.location as Point })),
         [byId],
     );
     useEffect(() => {
@@ -605,23 +620,55 @@ export default function MapPage() {
     useEffect(() => {
         if (features.error) setToast({ text: t("map.couldNotConnectToServer") });
     }, [features.error]);
+    // One reminder per visit that the map shows a subset (filter / hidden stops / favourites).
+    const cautionShown = useRef(false);
     useEffect(() => {
-        if (zoom >= 10 || selectionActive) return;
-        try {
-            if (localStorage.getItem(ZOOM_HINT_KEY)) return;
-        } catch {}
-        setToast({
-            text: t("map.zoomInMapForDetails"),
-            action: {
-                label: t("global.dontShowAgain"),
-                run: () => {
-                    try {
-                        localStorage.setItem(ZOOM_HINT_KEY, "1");
-                    } catch {}
+        if (cautionShown.current || selectionActive) return;
+        if (filterActive || !showStops) {
+            cautionShown.current = true;
+            setToast({
+                text: t("map.cautionFilteringTurnedOn"),
+                action: {
+                    label: t("global.reset"),
+                    run: () => {
+                        resetFilter();
+                        setShowStops(true);
+                    },
                 },
-            },
-        });
-    }, [zoom < 10]);
+            });
+        } else if (favouritesMode) {
+            cautionShown.current = true;
+            setToast({ text: t("map.cautionFavouritesTurnedOn") });
+        }
+    }, [filterActive, showStops, favouritesMode]);
+
+    // "Przybliż mapę…" after the user zooms out below the detail threshold (11 on phones, 10 elsewhere).
+    const hintBlocked = useRef(false);
+    hintBlocked.current = selectionActive || filterActive;
+    useEffect(() => {
+        if (!map) return;
+        const onZoomEnd = () => {
+            if (map.getZoom() >= (IS_MOBILE ? 11 : 10) || hintBlocked.current) return;
+            try {
+                if (localStorage.getItem(ZOOM_HINT_KEY)) return;
+            } catch {}
+            setToast({
+                text: t("map.zoomInMapForDetails"),
+                action: {
+                    label: t("global.dontShowAgain"),
+                    run: () => {
+                        try {
+                            localStorage.setItem(ZOOM_HINT_KEY, "1");
+                        } catch {}
+                    },
+                },
+            });
+        };
+        map.on("zoomend", onZoomEnd);
+        return () => {
+            map.off("zoomend", onZoomEnd);
+        };
+    }, [map]);
     useEffect(() => {
         if (vehicleLive.fatal === "POSITION_NOT_FOUND" && vehicleId) setToast({ text: t("map.signalGpsLost") });
     }, [vehicleLive.fatal]);
@@ -640,18 +687,22 @@ export default function MapPage() {
         }));
         setVehicleFilter(value.vehicles);
         if (!value.routes.length) return;
-        const handle = openSse<unknown, { positions: VehiclePosition[] }>(`/${city}/mapFeatures/0/0,0,0,0/stream`, { graph: 1, filterRoutes: value.routes.join(",") }, {
-            onMessage: (message) => {
-                handle.close();
-                const positions = message.positions ?? [];
-                setToast({ text: `${t("global.found")} ${t("plural.vehicle", { count: positions.length })}.` });
-                if (!map || !positions.length) return;
-                const first = positions[0][EVehiclePosition.location];
-                const bounds = new maplibregl.LngLatBounds(first, first);
-                for (const position of positions) bounds.extend(position[EVehiclePosition.location]);
-                setTimeout(() => map.fitBounds(bounds, { padding: 70, maxZoom: 15, duration: 250 }), 300);
+        const handle = openSse<unknown, { positions: VehiclePosition[] }>(
+            `/${city}/mapFeatures/0/0,0,0,0/stream`,
+            { graph: 1, filterRoutes: value.routes.join(",") },
+            {
+                onMessage: (message) => {
+                    handle.close();
+                    const positions = message.positions ?? [];
+                    setToast({ text: `${t("global.found")} ${t("plural.vehicle", { count: positions.length })}.` });
+                    if (!map || !positions.length) return;
+                    const first = positions[0][EVehiclePosition.location];
+                    const bounds = new maplibregl.LngLatBounds(first, first);
+                    for (const position of positions) bounds.extend(position[EVehiclePosition.location]);
+                    setTimeout(() => map.fitBounds(bounds, { padding: 70, maxZoom: 15, duration: 250 }), 300);
+                },
             },
-        });
+        );
     };
     const resetFilter = () => {
         setFavouritesMode(false);
@@ -693,32 +744,11 @@ export default function MapPage() {
     return (
         <Box ref={rootRef} className="noselect mapgl-map" sx={{ position: "relative", width: "100%", height: "100%" }}>
             <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
-            {map && (
+            {mapInstance && (
                 <>
                     <MapLogo bottom={selectionActive ? 0 : 1} />
-                    {(filterActive || favouritesMode) && !selectionActive && (
-                        <Box
-                            sx={{
-                                position: "absolute",
-                                top: "calc(62px + var(--sat))",
-                                left: 10,
-                                zIndex: 1000,
-                                display: "flex",
-                                gap: 1,
-                            }}
-                        >
-                            <Chip
-                                color="primary"
-                                size="small"
-                                label={favouritesMode ? t("map.cautionFavouritesTurnedOn") : t("map.cautionFilteringTurnedOn")}
-                                onDelete={resetFilter}
-                                onClick={() => (favouritesMode ? resetFilter() : setFilterOpen(true))}
-                                sx={{ boxShadow: 2 }}
-                            />
-                        </Box>
-                    )}
                     <MapControls
-                        map={map}
+                        map={mapInstance}
                         showBar={!selectionActive && !stopId}
                         filterActive={filterActive || !showStops}
                         favouritesActive={favouritesMode}
@@ -817,6 +847,7 @@ export default function MapPage() {
                     dark={dark}
                 />
             )}
+            {(!map || (features.loading && !features.positions.length && !selectionActive && filter.vehicles.length === 0)) && <MapLoadingOverlay />}
             <ToastHost />
             <Snackbar
                 open={!!suggested && !selectionActive && !stopId}

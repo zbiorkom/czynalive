@@ -37,7 +37,7 @@ export const settingsStore = createPersistedStore<Settings>("czynalive:settings"
     showRampBadge: false,
     departuresShowBrigade: false,
     departuresShowVehicleNo: false,
-    useLastMapLocation: true,
+    useLastMapLocation: false,
     startLocations: {},
     lastMapLocations: {},
     bottomNav: DEFAULT_BOTTOM_NAV,
