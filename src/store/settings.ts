@@ -1,6 +1,6 @@
 import { createPersistedStore } from "./persisted";
 
-export type BottomNavItem = "favourites" | "alerts" | "map" | "timetable" | "menu" | "brigades" | "delays" | "stats" | "cancelled";
+export type BottomNavItem = "favourites" | "alerts" | "map" | "timetable" | "menu" | "brigades" | "multiBrigades" | "delays" | "stats" | "cancelled";
 
 export type Settings = {
     city: string | null;
