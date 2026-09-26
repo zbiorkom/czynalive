@@ -64,14 +64,16 @@ export default function ChooseCityPage() {
             .catch(() => {});
     }, []);
 
+    const isVirtual = (city: { category: string; virtual?: unknown }) => city.category === "virtual" || !!city.virtual;
+
     const citiesWithDistance: Entry[] = useMemo(
         () =>
             cities
-                .filter((city) => city.category !== "virtual")
                 .map((city) => ({
                     city: city.id,
                     readableName: city.name,
-                    distanceKm: userLocation ? Math.round(haversineMeters(userLocation, city.location) / 1000) : null,
+                    // Virtual cities (PKP, Flixbus, …) span the country: no distance, never "detected".
+                    distanceKm: userLocation && !isVirtual(city) ? Math.round(haversineMeters(userLocation, city.location) / 1000) : null,
                 }))
                 .sort((a, b) => a.readableName.localeCompare(b.readableName, "pl")),
         [cities, userLocation],
@@ -80,10 +82,10 @@ export default function ChooseCityPage() {
     const filteredCities = useMemo(() => {
         const needle = normalize(query.trim());
         const list = needle ? citiesWithDistance.filter(({ city, readableName }) => normalize(readableName).includes(needle) || normalize(city).includes(needle)) : citiesWithDistance;
-        return sortMode === "distance" && userLocation ? [...list].sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0)) : list;
+        return sortMode === "distance" && userLocation ? [...list].sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity)) : list;
     }, [citiesWithDistance, query, sortMode, userLocation]);
 
-    const nearest = userLocation ? [...citiesWithDistance].sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))[0] : undefined;
+    const nearest = userLocation ? [...citiesWithDistance].filter((entry) => entry.distanceKm !== null).sort((a, b) => a.distanceKm! - b.distanceKm!)[0] : undefined;
     const detectedCity = nearest && (nearest.distanceKm ?? Infinity) <= DETECTED_CITY_RADIUS_KM ? nearest.city : null;
     const detectedEntry = citiesWithDistance.find((entry) => entry.city === detectedCity) ?? null;
     const showDetectedBanner = detectedCity !== null && detectedCity !== settings.city && sortMode !== "distance" && filteredCities.some((entry) => entry.city === detectedCity);

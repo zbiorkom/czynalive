@@ -1,3 +1,4 @@
+import { virtualCitiesOf } from "@/api/virtualCities";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DirectionsBusIcon from "@mui/icons-material/DirectionsBus";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
@@ -76,8 +77,12 @@ const useCityOverview = (city: string, open: boolean) => {
         if (!open || !cityInfo) return;
         let closed = false;
         let handle: { close: () => void } | null = null;
-        cityGet<RouteTuple[]>(city, "/routes")
-            .then((routes) => {
+        virtualCitiesOf(city)
+            .then((virtual) => Promise.all([cityGet<RouteTuple[]>(city, "/routes"), ...virtual.map(([virtualCity]) => cityGet<RouteTuple[]>(virtualCity, "/routes").catch(() => []))]))
+            .then(([ownRoutes, ...virtualLists]) => {
+                const ownKeys = new Set(ownRoutes.map(lineKey));
+                const virtualRoutes = virtualLists.flat().filter((route) => !ownKeys.has(lineKey(route)));
+                const routes = ownRoutes;
                 if (closed) return;
                 const base: Overview = overviewCache.get(city) ?? { routes, lineCounts: {}, typeCounts: {}, stopsCount: 0 };
                 setOverview({ ...base, routes });
@@ -86,7 +91,7 @@ const useCityOverview = (city: string, open: boolean) => {
                 let stopsCount = base.stopsCount;
                 handle = openSse<{ stops: StopTuple[] }, { positions: VehiclePosition[] }>(
                     `/${city}/mapFeatures/15/${bounds}/stream`,
-                    { graph: 1, filterRoutes: routes.map((route) => route[ERouteTuple.routeId]).join(",") },
+                    { graph: 1, filterRoutes: [...new Set([...routes, ...virtualRoutes].map((route) => route[ERouteTuple.routeId]))].join(",") },
                     {
                         onInitial: (initial) => {
                             stopsCount = initial.stops?.length ?? 0;
@@ -100,7 +105,8 @@ const useCityOverview = (city: string, open: boolean) => {
                                 lineCounts[key] = (lineCounts[key] ?? 0) + 1;
                                 typeCounts[route[ERouteTuple.routeType]] = (typeCounts[route[ERouteTuple.routeType]] ?? 0) + 1;
                             }
-                            const next = { routes, lineCounts, typeCounts, stopsCount };
+                            // Virtual-city lines (trains, coaches) are listed only while they run in the city's area.
+                            const next = { routes: [...routes, ...virtualRoutes.filter((route) => lineCounts[lineKey(route)])], lineCounts, typeCounts, stopsCount };
                             overviewCache.set(city, next);
                             setOverview(next);
                             handle?.close();

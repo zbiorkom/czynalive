@@ -1,3 +1,4 @@
+import { cityRouteIdsWithVirtual } from "@/api/virtualCities";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 import { cityGet } from "@/api/client";
@@ -43,23 +44,6 @@ export type MapFeatures = { positions: VehiclePosition[]; dots: [string, Point][
 type Initial = { stops: StopTuple[]; suggestedCity?: string };
 type Message = { positions: VehiclePosition[]; dots: [string, Point][]; bbox?: number[] };
 
-const routeIdsCache = new Map<string, Promise<string[]>>();
-
-// Every route id of the city: `graph=1` + all routes makes the stream send full positions (never dots), like czynaczas' city-wide feed.
-const cityRouteIds = (city: string) => {
-    let ids = routeIdsCache.get(city);
-    if (!ids) {
-        ids = cityGet<RouteTuple[]>(city, "/routes")
-            .then((routes) => routes.map((route) => route[0]))
-            .catch(() => {
-                routeIdsCache.delete(city);
-                return [];
-            });
-        routeIdsCache.set(city, ids);
-    }
-    return ids;
-};
-
 // `mapFeatures/:zoom/:bounds/stream`, reopened when the viewport or the line filter changes.
 export const useMapFeatures = (city: string, viewport: Viewport | null, filterRoutes: string[], enabled = true): MapFeatures => {
     const [state, setState] = useState<MapFeatures>({ positions: [], dots: [], stops: [], error: false, loading: true });
@@ -73,7 +57,7 @@ export const useMapFeatures = (city: string, viewport: Viewport | null, filterRo
         setState((prev) => ({ ...prev, loading: true }));
         let handle: { close: () => void } | null = null;
         let cancelled = false;
-        (routesKey ? Promise.resolve(routesKey.split(",")) : cityRouteIds(city)).then((routeIds) => {
+        (routesKey ? Promise.resolve(routesKey.split(",")) : cityRouteIdsWithVirtual(city)).then((routeIds) => {
             if (cancelled) return;
             const query = routeIds.length ? { filterRoutes: routeIds.join(","), graph: 1 } : {};
             handle = openSse<Initial, Message>(`/${city}/mapFeatures/${zoom}/${viewport.bounds.join(",")}/stream`, query, {
